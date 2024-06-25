@@ -40,9 +40,8 @@ tether.tetherDetails()
 ```
 ### Output:
 
-![image](https://github.jpl.nasa.gov/storage/user/10303/files/aec29926-7b1d-4345-9cf6-d9e9554fd085)
-
-![Screenshot 2023-08-09 at 4 39 27 PM](https://github.jpl.nasa.gov/storage/user/10303/files/3e72ec52-3462-471a-98e1-f07c554145d2)
+![example_geometry](https://github.com/nasa-jpl/TetherCAD/assets/17715764/e2e813db-cb81-4471-aa3a-784fbc7713a2)
+![image](https://github.com/nasa-jpl/TetherCAD/assets/17715764/966c7085-270b-4bf7-a194-a6f6ddf7f03d)
 
 
 ### Explanation:
@@ -78,7 +77,8 @@ efficiency = dc_power_transmission_analysis(tether, 500, 1000, send_paths, retur
 ```
 ### Output:
 
-![Screenshot 2023-08-09 at 6 15 05 PM](https://github.jpl.nasa.gov/storage/user/10303/files/427ad8e3-6139-40a1-8de2-adf6adf7f011)
+![image](https://github.com/nasa-jpl/TetherCAD/assets/17715764/26b75118-196e-4d9f-870c-28a26830054b)
+
 
 ### Explanation
 
