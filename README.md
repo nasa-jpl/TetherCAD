@@ -68,7 +68,7 @@ A piece of simple example code running a power analysis is shown below. **Note:*
 ### Code:
 
 ```
-from tethercad.calculation_libraries.PowerAnalysis import dc_power_transmission_analysis
+from calculation_libraries.PowerAnalysis import dc_power_transmission_analysis
 
 pathList = tether.findWires("electrical")
 send_paths = [pathList[0], pathList[2]]
