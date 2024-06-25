@@ -17,7 +17,7 @@ A piece of simple example code building a tether is shown below:
 
 ### Code:
 ```
-from tethercad.tether_analysis.TetherDesign import Layer, Wire, RoundTetherDesign
+from tether_analysis.TetherDesign import Layer, Wire, RoundTetherDesign
 
 # Construct a kapton insulated copper wire
 conductor = Layer("copper", "Conductor", 0.25)
