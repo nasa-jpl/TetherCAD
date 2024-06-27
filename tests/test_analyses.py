@@ -488,16 +488,39 @@ class TestGeometryAnalyses:
         for item in massList:
             assert item[2] == 0
 
-    # Each of the comm analyses should be tested on the following:
-    # - Correct number against a known working version
-    # - Value error if send/return layer materials differ
-    # - Value error if insulation thickneses differ
-    # - Value error if conductor materials differ
-    # - Value error if conductor sizes differ
-    # - Value error frequency <= 0 is passed
+    # Test that the fill ratio lowers strength
+    @pytest.mark.filterwarnings("ignore::UserWarning")
+    def test_fillRatio_strength(self):
+        # Create some layers with different fill ratios
+        layer1 = Layer("fep", "layer1", 1, fillRatio=1)
+        layer2 = Layer("fep", "layer1", 1, fillRatio=0.5)
+        layer3 = Layer("fep", "layer1", 1, fillRatio=0.25)
 
-    # Resistance specific checks:
-    # - Temp lower than abs zero causes a value error
+        # Create some tethers using each layer
+        tet1 = RoundTetherDesign("tet1", layer1, 10)
+        tet2 = RoundTetherDesign("tet2", layer2, 10)
+        tet3 = RoundTetherDesign("tet3", layer3, 10)
+
+        # Calculate the unhelix-allowed strength for each tether
+        unhStr1 = tet1.unhelixStrength(output=False)
+        unhStr2 = tet2.unhelixStrength(output=False)
+        unhStr3 = tet3.unhelixStrength(output=False)
+
+        # Calculate the straight-run strength for each tether
+        srStr1 = tet1.straightRunStrength(output=False)
+        srStr2 = tet2.straightRunStrength(output=False)
+        srStr3 = tet3.straightRunStrength(output=False)
+
+        # Make sure they all have the expected order of max->min strength
+        assert (unhStr1 > unhStr2 > unhStr3)
+        assert (srStr1 > srStr2 > srStr3)
+
+        # Make sure the relationship is what we expect for each
+        assert ((unhStr1 * 0.5) == unhStr2)
+        assert ((unhStr1 * 0.25) == unhStr3)
+        assert ((srStr1 * 0.5) == srStr2)
+        assert ((srStr1 * 0.25) == srStr3)
+
 
 
 class TestCommAnalyses:

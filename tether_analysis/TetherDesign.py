@@ -1103,7 +1103,7 @@ class RoundTetherDesign():
 
             # Calculate the cross sectional area of the layer #
             mm_to_m = DB.build_multiplier("mm^2", "m^2")
-            csa = (layer.outerRadius**2 - layer.innerRadius**2) * np.pi * mm_to_m
+            csa = (layer.outerRadius**2 - layer.innerRadius**2) * np.pi * mm_to_m * layer.fillRatio
 
             # Calculate the spring constant for the layer (young's * cross section) #
             gpa_to_pa = 1 / DB.build_multiplier("Pa", "GPa")
@@ -1201,7 +1201,7 @@ class RoundTetherDesign():
 
                 strain = yield_stress / young_mod
                 mm_to_m = DB.build_multiplier("mm^2", "m^2")
-                csa = (layer.outerRadius**2 - layer.innerRadius**2) * np.pi * mm_to_m
+                csa = (layer.outerRadius**2 - layer.innerRadius**2) * np.pi * mm_to_m * layer.fillRatio
                 gpa_to_pa = 1 / DB.build_multiplier("Pa", "GPa")
                 spring_const = (young_mod * csa * gpa_to_pa) / layer.length 
 
