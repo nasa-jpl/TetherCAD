@@ -73,7 +73,7 @@ def calculate_wire_resistance(wire, temp):
     length_mm = conductor.length * length_mult
 
     # Calculate the cross sectional area of the conductor #
-    cross_section = (conductor.outerRadius**2 - conductor.innerRadius**2) * np.pi
+    cross_section = (conductor.outerRadius**2 - conductor.innerRadius**2) * np.pi * conductor.fillRatio
 
     resistance = resistivity * (length_mm / cross_section)
 
@@ -312,6 +312,8 @@ def dc_power_transmission_analysis(tether, tether_voltage, desired_power, send_p
     return_resistance_eq = calculate_equivalent_resistance(return_path_wires, temp)
     total_eq_resistance = send_resistance_eq + return_resistance_eq
 
+    print(" DC Resistance: %f" % total_eq_resistance)
+
     # Formulate the problem as a quadratic equation and solve #
     coeffs = [total_eq_resistance, -tether_voltage, desired_power]
     roots = np.roots(coeffs)
@@ -409,6 +411,171 @@ def dc_power_transmission_analysis(tether, tether_voltage, desired_power, send_p
     #TODO: add the ability to return all of these calculated parameters
     return efficiencyList
 
-def single_phase_ac_transmission_analysis(tether, line_to_line_voltage, desired_power, send_paths, return_paths, 
-                                          print_results=True, temp=20, verbose=False, analysis_name=""):
-    pass
+def single_phase_ac_transmission_analysis(tether, tether_voltage_rms, desired_power, send_paths, return_paths, print_results=True, 
+                                   temp=20, frequency=60, verbose=False, analysis_name = ""):
+    """Determines the DC power transmission characteristics of a given tether by stepping up the input power until the 
+       desired output power is determined.
+
+    Args:
+        tether (RoundTetherDesign): RoundTetherDesign object used to interact with tether
+        tether_voltage (float): The input voltage to the tether (V)
+        desired_power (float): The desired output power from the tether (W)
+        send_paths (list): A list of layer paths corresponding to wires in the tether design to be used as the send 
+        paths of the transmission line
+        return_paths (list): A list of layer paths corresponding to wires in the tether design to be used as the return 
+        paths of the transmission line
+        print_results (bool): Whether to print the results of the analysis in addition to returning the 
+        efficiency of the tether
+        temp (int, optional): Temperature of the conductor materials in celcius. Defaults to 20 C.
+        frequency(int, optional): The Frequency of the AC signal in Hz. Defaults to 60 Hz.
+        verbose (bool, optional): Whether to print full send/return path information when printing is enabled. 
+
+    Raises:
+        ValueError: tether argument was not an object of type RoundTetherDesign
+        ValueError: send_paths list is empty
+        ValueError: return_paths list is empty
+        ValueError: Voltage is <= 0
+        ValueError: Desired power output is <= 0
+        ValueError: Frequency is < 0
+        RuntimeError: A path is in both the send/return path lists
+        ValueError: None of the send path wires were found in the tether
+        ValueError: None of the return path wires were found in the tether
+        ValueError: Imaginary solution returned 
+
+    Returns:
+        list: List of the efficiencies of each solution
+    """
+
+    
+
+
+    # Throw some generic errors #
+    if not issubclass(type(tether), TD.RoundTetherDesign):
+        raise ValueError("Tether argument must be of type RoundTetherDesign!")
+    if len(send_paths) < 1:
+        raise ValueError("No send paths specified!")
+    if len(return_paths) < 1:
+        raise ValueError("No return paths specified!")
+    if tether_voltage_rms <= 0:
+        raise ValueError("Voltage must be greater than 0!")
+    if desired_power <= 0:
+        raise ValueError("Desired power output must be greater than or equal to 0!")
+    if frequency < 0:
+        raise ValueError("Frequency cannot be less than 0 Hz!")
+
+    # Check for duplicates, note that this may need to change if coaxial designs are introduced #
+    for path in send_paths:
+        if path in return_paths:
+            raise RuntimeError("The path %s is present in both lists! A single path cannot be both a send and return!")
+
+    # Build lists of wires for send/return paths from names #
+    send_path_wires = tether.buildLayerList(send_paths)
+    return_path_wires = tether.buildLayerList(return_paths)
+    if(len(send_path_wires) < 1):
+        raise ValueError("Send path wires were not found in passed tether design!")
+    if(len(return_path_wires) < 1):
+        raise ValueError("Return path wires were not found in passed tether design!")
+
+    # Calculate the equivalent resistance for the send and return paths #
+    send_resistance_eq = calculate_equivalent_resistance(send_path_wires, temp, ac=True, freq=frequency)
+    return_resistance_eq = calculate_equivalent_resistance(return_path_wires, temp, ac=True, freq=frequency)
+    total_eq_resistance = send_resistance_eq + return_resistance_eq
+
+    print(" AC Resistance: %f" % total_eq_resistance)
+
+    # Formulate the problem as a quadratic equation and solve #
+    coeffs = [total_eq_resistance, -tether_voltage_rms, desired_power]
+    roots = np.roots(coeffs)
+    solutions = [x for x in roots if np.isreal(x)]
+
+    # If we don't have any real solutions throw an error # 
+    if len(solutions) < 1:
+        current = (min(roots))
+        raise ValueError("Solution cannot be found with given parameters! Tether Voltage drop is likely too high!") 
+
+    # Sort solutions in increasing order, the first will be the more stable #
+    solutions = sorted(solutions)
+
+    efficiencyList = []
+
+    for idx, current in enumerate(solutions):
+
+        voltage_drop_send = current * send_resistance_eq
+        voltage_drop_return = current * return_resistance_eq
+        power_loss_send = current * voltage_drop_send
+        power_loss_return = current  * voltage_drop_return
+
+        input_power = current * tether_voltage_rms
+        power_transmitted = input_power - power_loss_send - power_loss_return
+        
+
+        # Calculate our tether power efficiency #
+        tether_power_efficiency = power_transmitted / input_power * 100
+
+        # If we want per-wire data, calculate it here #
+        if verbose:
+            send_power_dict = {}
+            return_power_dict = {}
+            send_current_dict = {}
+            return_current_dict = {}
+            send_power_disp_dict = {}
+            return_power_disp_dict = {}
+            for wire in send_path_wires:
+                resistance = calculate_wire_resistance(wire, temp)
+                wire_current = voltage_drop_send / resistance
+                wire_power_loss = wire_current * voltage_drop_send
+                send_power_dict[wire.layerPath] = wire_power_loss
+                send_current_dict[wire.layerPath] = wire_current
+                send_power_disp_dict[wire.layerPath] = wire_power_loss / tether.length
+            for wire in return_path_wires:
+                resistance = calculate_wire_resistance(wire, temp)
+                wire_current = voltage_drop_return / resistance
+                wire_power_loss = wire_current * voltage_drop_return
+                return_power_dict[wire.layerPath] = wire_power_loss
+                return_current_dict[wire.layerPath] = wire_current
+                return_power_disp_dict[wire.layerPath] = wire_power_loss / tether.length
+                
+        # Print results if desired #
+        if(print_results):
+            
+            # Print stability of solution (as long as inputs are rational, we'll always have two or 0 solutions) # 
+            stabStr = "More Stable Solution"
+            if idx > 0:
+                stabStr = "Less Stable Solution"
+
+            print("--- %s Power Transmission Results for: %s ---" % (analysis_name, tether.name))
+            print("  Solution Stability:            %s" % stabStr)
+            print("  Send Path:")
+            print("     - Eq. Resistance:           %f ohms" % send_resistance_eq)
+            print("     - Voltage Drop:             %f V" % voltage_drop_send)
+            print("     - Power Loss:               %f W" % power_loss_send)
+            if(verbose):
+                print("     - Send Paths:               %s" % str(send_paths))
+                print("     - Current Per Wire (A):     %s" % str(send_current_dict))
+                print("     - Total Loss Per Wire (W):  %s" % str(send_power_dict))
+                print("     - Power Dissipation: (W/m): %s" % str(send_power_disp_dict))
+            print("  Return Path:")
+            print("     - Eq. Resistance:           %f ohms" % return_resistance_eq)
+            print("     - Voltage Drop:             %f V" % voltage_drop_return)
+            print("     - Power Loss:               %f W" % power_loss_return)
+            if(verbose):
+                print("     - Return Paths:             %s" % str(return_paths))
+                print("     - Current Per Wire (A):     %s" % str(return_current_dict))
+                print("     - Total Loss Per Wire (W):  %s" % str(return_power_dict))
+                print("     - Power Dissipation: (W/m): %s" % str(return_power_disp_dict))
+            print("  General:")
+            print("     - Required Input Power:     %f W" % input_power)
+            print("     - Actual Output Power:      %f W" % power_transmitted)
+            print("     - Round Trip Resistance:    %f ohms" % (send_resistance_eq + return_resistance_eq))
+            print("     - Tether Power Loss:        %f W" % (power_loss_send + power_loss_return))
+            print("     - Tether Input Voltage:     %f V" % tether_voltage_rms)
+            print("     - Tether Output Voltage:    %f V" % (tether_voltage_rms - voltage_drop_send - voltage_drop_return))
+            print("     - Tether Current:           %f A" % current)
+            print("     - Tether Power Efficiency:  %.2f %%" % tether_power_efficiency)
+            print("     - Power Dissipation:        %f W/m" % ((power_loss_send + power_loss_return) / tether.length))
+            print("\n")
+
+        efficiencyList.append(tether_power_efficiency)
+
+    #TODO: add the ability to return all of these calculated parameters
+    return efficiencyList

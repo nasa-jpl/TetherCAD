@@ -425,6 +425,68 @@ class TestElectricalAndPowerAnalyses:
                            match=r"Solution cannot be found with given parameters! Tether Voltage drop is likely too" +
                             " high!"):
             dc_power_transmission_analysis(electrical_tether, 1, 100, send_paths, return_paths, False)
+
+    # --- Test DC Power Analysis ###
+    @pytest.mark.usefixtures("electrical_tether", "coaxial_tether")
+    @pytest.mark.filterwarnings("ignore::UserWarning")
+    def test_single_phase_ac_transmission_analysis(self, electrical_tether):
+        
+        wireList = electrical_tether.findWires("electrical")
+        send_paths = [wireList[0], wireList[2], wireList[4]]
+        return_paths = [wireList[1], wireList[3], wireList[5]]
+
+        # Test against a known figure from a tether design
+        eff = single_phase_ac_transmission_analysis(electrical_tether, 500, 500, send_paths, return_paths, False)
+        assert np.round(eff[0]) == 97
+        assert eff[0] > eff[1]
+
+        # Test using layers in a coaxial cable 
+        eff = single_phase_ac_transmission_analysis(coaxial_tether, 500, 100, ["L2"], ["L4"], False)
+        assert(isclose(eff[0], 99.86, rel_tol=1e-2))
+        assert eff[0] > eff[1]
+
+        # Test very large voltages
+        eff = single_phase_ac_transmission_analysis(coaxial_tether, 5e20, 100, ["L2"], ["L4"], False)
+        assert eff[0] == 100.0
+        assert eff[0] > eff[1]        
+    
+
+    # --- Test Errors for DC Power Analysis --- #
+    @pytest.mark.usefixtures("electrical_tether")
+    @pytest.mark.filterwarnings("ignore::UserWarning")
+    def test_single_phase_ac_transmission_analysis(self, electrical_tether):
+
+        wireList = electrical_tether.findWires("electrical")
+        send_paths = [wireList[0], wireList[2], wireList[4]]
+        return_paths = [wireList[1], wireList[3], wireList[5]]
+
+        # Test standard cases #
+        with pytest.raises(ValueError, match="Tether argument must be of type RoundTetherDesign!"):
+            dc_power_transmission_analysis(1, 100, 100, send_paths, return_paths, False)
+        with pytest.raises(ValueError, match="Voltage must be greater than 0!"):
+            dc_power_transmission_analysis(electrical_tether, 0, 100, send_paths, return_paths, False)
+        with pytest.raises(ValueError, match="Desired power output must be greater than or equal to 0!"):
+            dc_power_transmission_analysis(electrical_tether, 100, 0, send_paths, return_paths, False)
+        with pytest.raises(ValueError, match="No send paths specified!"):
+            dc_power_transmission_analysis(electrical_tether, 500, 100, [], return_paths, False)
+        with pytest.raises(ValueError, match="No return paths specified!"):
+            dc_power_transmission_analysis(electrical_tether, 500, 100, send_paths, [], False)
+        with pytest.raises(AttributeError):
+            alt_sends = ["L23"]
+            dc_power_transmission_analysis(electrical_tether, 500, 100, alt_sends, return_paths, False)
+        with pytest.raises(AttributeError):
+            alt_recvs = ["L24"]
+            dc_power_transmission_analysis(electrical_tether, 500, 100, send_paths, alt_recvs, False)
+        with pytest.raises(RuntimeError):
+            send_paths_dupe = [wireList[0], wireList[1], wireList[2], wireList[4]]
+            dc_power_transmission_analysis(electrical_tether, 500, 100, send_paths_dupe, return_paths, False)
+        with pytest.raises(RuntimeError):
+            return_paths_dupe = [wireList[0], wireList[1], wireList[3], wireList[5]]
+            dc_power_transmission_analysis(electrical_tether, 500, 100, send_paths, return_paths_dupe, False)
+        with pytest.raises(ValueError, 
+                           match=r"Solution cannot be found with given parameters! Tether Voltage drop is likely too" +
+                            " high!"):
+            dc_power_transmission_analysis(electrical_tether, 1, 100, send_paths, return_paths, False)
         
 
 class TestGeometryAnalyses:
