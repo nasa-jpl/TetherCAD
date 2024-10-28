@@ -26,7 +26,7 @@ databases = DB.DatabaseControl()
 class Layer():
 
     def __init__(self, material, name, thickness, innerLayer=None, memberList=None, copy=True, color=None, 
-                 helixAngle=65, fillRatio=1.0, iter_limit=100000, step=0.001) -> None:
+                 helixAngle=90, fillRatio=1.0, iter_limit=100000, step=0.001) -> None:
         """Constructor for Layer class.
 
         Args:
@@ -40,7 +40,7 @@ class Layer():
             Will throw a warning if disabled. Defaults to True.
             color (str, optional): Desired color of the layer, overriding the material color. 
             All CSS named colors are valid. Defaults to None.
-            helixAngle(float, optional): Angle at which members in the member list are helixed. Defaults to 65
+            helixAngle(float, optional): Angle at which the fill and any members in the member list are helixed. Defaults to 0.
             iter_limit (int, optional): Iteration limit of the fitting algorithm, 
             to avoid an infinite loop. Defaults to 100000.
             step (float, optional): The amount to step the layer size by when defining layer geometry. Defaults to 1e-3.
@@ -69,6 +69,7 @@ class Layer():
         self.x = 0
         self.y = 0
         self.polarCoords = [0, 0]
+
 
         if fillRatio <= 0 or fillRatio > 1:
             raise ValueError("Fill ratio must be between (0, 1]!")
@@ -537,7 +538,22 @@ class Layer():
         m_to_mm_mult = DB.build_multiplier("m", "mm")
 
         # Set length variables in terms of mm and m for readability #
-        length_mm = self.length * m_to_mm_mult
+        length_mm = self.length * m_to_mm_mult 
+        fill_length = self.length 
+
+        # Length adjustment for helixed fill 
+        if(self.helixAngle != 90):
+            if(self.helixAngle == 0):
+                raise ValueError("The helix angle must have a positive, nonzero value!")
+
+            # Calculate "lead" of the helixed fill # 
+            startCircumference = (self.outerRadius - self.innerRadius) * np.pi
+            fillLead = startCircumference * np.tan(np.deg2rad(self.helixAngle))
+
+            # Calculate the length of the helixed fill #
+            numArcs = length_mm / fillLead 
+            helixLen = np.sqrt(fillLead ** 2 + startCircumference ** 2)
+            length_mm = helixLen * numArcs
 
         totalVolume = (self.outerRadius**2 - self.innerRadius**2) * np.pi * length_mm * self.fillRatio
 
@@ -577,7 +593,7 @@ class Layer():
             raise ValueError("A length of less than 0 was passed!")
 
         # Assign the length of this layer and any wrapped layers to what was passed #
-        self.length = length
+        self.length = length 
 
         if self.innerLayer is not None:
             self.innerLayer.assignLayerLengths(length)
@@ -1036,7 +1052,7 @@ class RoundTetherDesign():
                 maxFiberOD = fiber.outerDiameter
 
         wireRule = 12 * maxWireOD
-        fiberRule = 20 * maxFiberOD
+        fiberRule = 20 * maxFiberOD # TODO add Curtis's math (ask for source)
 
         return max(tetherRule, wireRule, fiberRule)
 
@@ -1184,10 +1200,10 @@ class RoundTetherDesign():
 
         forceCarryingLayers = []
 
+
         # Build a list of layers that will see stretch & contribute to strength #
         for layer in tetherLayers:
             if layer.length < tether_break_len:
-
                 # Calculate force contribution #
                 material_entry = databases.get_material_entry(layer.layerMaterial)
                 yield_stress = DB.get_material_property(material_entry, "stress")
