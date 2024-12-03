@@ -312,8 +312,6 @@ def dc_power_transmission_analysis(tether, tether_voltage, desired_power, send_p
     return_resistance_eq = calculate_equivalent_resistance(return_path_wires, temp)
     total_eq_resistance = send_resistance_eq + return_resistance_eq
 
-    print(" DC Resistance: %f" % total_eq_resistance)
-
     # Formulate the problem as a quadratic equation and solve #
     coeffs = [total_eq_resistance, -tether_voltage, desired_power]
     roots = np.roots(coeffs)

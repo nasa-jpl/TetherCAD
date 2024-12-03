@@ -31,9 +31,9 @@ def average_margined_spool_capacity(innerDiameter, outerDiameter, spoolWidth, te
         float: The averaged margined capacity of the described spool in meters. 
     """
 
-    if not issubclass(type(tether), RoundTetherDesign):
-        raise ValueError("An object of type %r was passed as the tether design! Must be a subclass of RoundTetherDesign"
-                          % type(tether))
+    # if not issubclass(type(tether), RoundTetherDesign):
+    #     raise ValueError("An object of type %r was passed as the tether design! Must be a subclass of RoundTetherDesign"
+    #                       % type(tether))
     if packMargin < 0:
         raise ValueError("Packing margin cannot be less than 0%!")
     
@@ -179,7 +179,7 @@ def determine_spool_width(tether, innerDiameter, outerDiameter, packMargin=0, ve
     return spoolWidth
 
 
-def determine_spool_od(tether, innerDiameter, width, packMargin=0, verbose=True):
+def determine_spool_od(tether, innerDiameter, width, packMargin=0, verbose=True, method="averaged"):
     """Iteratively determines the outer diameter of a spool to fit the desired tether. Inner diameter
     and width are set by the user. 
 

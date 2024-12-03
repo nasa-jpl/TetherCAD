@@ -989,13 +989,23 @@ class RoundTetherDesign():
         # Geometry and physical properties #
         self.diameter = self.layer.outerDiameter       # (mm)
         self.radius = self.layer.outerRadius           # (mm)
+        
+        # Calculate lengths and estimate mass, MBR, and strength
+        self._calculateMechanicalProperties()
+
+    def _calculateMechanicalProperties(self):
+        """ Calculates mechanical properties of tether on construction or on updates. 
+        """
+        # Geometry and physical properties #
         self.layer.assignLayerLengths(self.length)
         self.mass = self.calculateMass()
         self.minBendRadius = self.calculateMinBendRadius()
 
-        # Find length values #
+        # Find strength values #
         self.strengthUpperBound = self.unhelixStrength(output=False)
         self.strengthLowerBound = self.straightRunStrength(output=False)
+
+
 
     def tetherDetails(self, recursive=False):
         """Prints the details of the tether.
@@ -1119,7 +1129,7 @@ class RoundTetherDesign():
 
             # Calculate the cross sectional area of the layer #
             mm_to_m = DB.build_multiplier("mm^2", "m^2")
-            csa = (layer.outerRadius**2 - layer.innerRadius**2) * np.pi * mm_to_m * layer.fillRatio
+            csa = (layer.outerRadius**2 - layer.innerRadius**2) * np.pi * mm_to_m * layer.fillRatio * np.sin(np.radians(layer.helixAngle))
 
             # Calculate the spring constant for the layer (young's * cross section) #
             gpa_to_pa = 1 / DB.build_multiplier("Pa", "GPa")
@@ -1204,6 +1214,7 @@ class RoundTetherDesign():
         # Build a list of layers that will see stretch & contribute to strength #
         for layer in tetherLayers:
             if layer.length < tether_break_len:
+
                 # Calculate force contribution #
                 material_entry = databases.get_material_entry(layer.layerMaterial)
                 yield_stress = DB.get_material_property(material_entry, "stress")
@@ -1245,8 +1256,6 @@ class RoundTetherDesign():
                     print("    - Spring Constant: {}".format(properties[4]))
 
         return break_force
-
-
 
 
     def findWires(self, wireType):
@@ -1346,6 +1355,70 @@ class RoundTetherDesign():
         """
         return self.__dict__ == other.__dict__
     
+    def adjustLayerPosition(self, path, x_delta, y_delta):
+        """ Manually Adjust layer coordinates by x_delta and y_delta
+
+        Args:
+            path (string): The path of the target layer within the tree.
+            x_delta (float): The adjustment to the x coordinate of the layer's position.
+            y_delta (float): The adjustment to the y coordinate of the layer's position.
+        """
+        
+        layer = self.getLayerAtPath(path)
+        layer.x += x_delta
+        layer.y += y_delta
+        layer.polarCoords = cart_to_polar([layer.x, layer.y])
+        layer.update_member_positions()
+
+    def adjustLayerThickness(self, path, thickness):
+        """ Manually adjust the thickness of a layer. Does not check for validity. 
+        
+        Args: 
+            path (string): The path of the target layer within the tree.
+            thickness (float): The desired thickness of the layer 
+        """
+
+        layer = self.getLayerAtPath(path)
+        layer.thickness = thickness
+        layer.outerDiameter = layer.innerDiameter + layer.thickness
+        layer.outerRadius = layer.outerDiameter / 2
+
+    def updateLayerSizeFromInner(self, path):
+        """ Manually adjust the thicknes sof a path from its inner layer, using its set thickness
+
+        Args:
+            path (string): The path of the target layer within the tree
+        """
+
+        layer = self.getLayerAtPath(path)
+        layer._setLayerDimensions()
+
+    def addMemberToLayer(self, path, member, x, y):
+        """ Manually adds a member to a given layer at the chosen coordinates
+        
+        Args:
+            path (string): The layer which a member is added to. 
+            member (Layer): The member to add.
+            x (float): The x coordinate of the member. 
+            y (float): The y coordinate of the member. 
+        """
+
+        # Grab layer and make a copy of the desired member #
+        layer = self.getLayerAtPath(path)
+        newMem = deepcopy(member)
+
+        # Assign coordinates for the new member and update encapsulated layers # 
+        newMem.x = x
+        newMem.y = y
+        newMem.polarCords = cart_to_polar([newMem.x, newMem.y])
+        newMem.update_member_positions()
+        
+        # Add it to the list and then make sure all paths are up-to-date # 
+        layer.memberList.append(newMem)
+        self.assignLayerPaths()
+        self._calculateMechanicalProperties()
+
+
 
 # Some helper functions #
 def midpoint(p1, p2):

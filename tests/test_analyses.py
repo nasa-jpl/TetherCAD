@@ -46,7 +46,7 @@ def wire_list():
 def electrical_tether(wire_list):
 
     core = Layer("fep", "core", 0.25)
-    memLayer = Layer("fep", "wires", 0.5, innerLayer=core, memberList=wire_list)
+    memLayer = Layer("fep", "wires", 0.5, innerLayer=core, memberList=wire_list, helixAngle=65)
     abrasion = Layer("kapton", "abrasion", 0.15, innerLayer=memLayer)
 
     tether = RoundTetherDesign("simple tether", abrasion, 100)
@@ -496,17 +496,42 @@ class TestGeometryAnalyses:
     # - Test strength does not scale with length
     # - Test layers of length zero give a strength of zero
     @pytest.mark.usefixtures("electrical_tether")
+    @pytest.mark.usefixtures("wire_list")
     @pytest.mark.filterwarnings("ignore::UserWarning")
-    def test_straight_run_strength(self, electrical_tether):
+    def test_straight_run_strength(self, electrical_tether, wire_list):
 
         # Test a known value from a well working version
         strength = electrical_tether.straightRunStrength(output=False)
-        assert np.round(strength, 3) == 215.832
+        assert np.round(strength, 3) == 215.511
 
         # Make sure this does not change with length
         electrical_tether.layer.assignLayerLengths(10e3)
         strength1 = electrical_tether.straightRunStrength(output=False)
         assert np.round(strength, 3) == np.round(strength1, 3)
+
+        # Test that strength decreases with decreasing helix angle
+        core = Layer("fep", "core", 0.25)
+        memLayer = Layer("fep", "wires", 0.5, innerLayer=core, memberList=wire_list, helixAngle=90)
+        abrasion = Layer("kapton", "abrasion", 0.15, innerLayer=memLayer)
+        tether = RoundTetherDesign("simple tether", abrasion, 100)
+        strength2 = tether.straightRunStrength(output=False)
+
+        core = Layer("fep", "core", 0.25)
+        memLayer = Layer("fep", "wires", 0.5, innerLayer=core, memberList=wire_list, helixAngle=65)
+        abrasion = Layer("kapton", "abrasion", 0.15, innerLayer=memLayer)
+        tether = RoundTetherDesign("simple tether", abrasion, 100)
+        strength3 = tether.straightRunStrength(output=False)
+
+        core = Layer("fep", "core", 0.25)
+        memLayer = Layer("fep", "wires", 0.5, innerLayer=core, memberList=wire_list, helixAngle=25)
+        abrasion = Layer("kapton", "abrasion", 0.15, innerLayer=memLayer)
+        tether = RoundTetherDesign("simple tether", abrasion, 100)
+        strength4 = tether.straightRunStrength(output=False)
+
+        assert (strength2 > strength3 > strength4)
+
+
+
 
     # Test unhelix strength:
     @pytest.mark.usefixtures("wire_list")
@@ -515,7 +540,7 @@ class TestGeometryAnalyses:
         
         # Test a known value from a well working version
         core = Layer("fep", "core", 0.25)
-        memLayer = Layer("fep", "wires", 0.5, innerLayer=core, memberList=wire_list)
+        memLayer = Layer("fep", "wires", 0.5, innerLayer=core, memberList=wire_list, helixAngle=65)
         abrasion = Layer("kapton", "abrasion", 0.15, innerLayer=memLayer)
         tether = RoundTetherDesign("simple tether", abrasion, 100)
         strength = tether.unhelixStrength(output=False)
@@ -536,7 +561,7 @@ class TestGeometryAnalyses:
         
         # Test against a known value and verify that the breakdown is correct 
         mass, massList = electrical_tether.calculateMass(breakdown=True)
-        assert np.round(mass, 3) == 1164.068
+        assert np.round(mass, 3) == 1220.986
         massSum = 0
         for item in massList:
             massSum += item[2]
