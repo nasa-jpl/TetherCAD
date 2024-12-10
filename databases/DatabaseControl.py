@@ -48,12 +48,12 @@ class DatabaseControl:
         self.wireDefaultUnits = {"insulation_thickness":"mm", "insulation_od":"mm", "conductor_od":"mm",
                                  "weight/length":"kg/km", "Voltage(DC)":"V"}
         self.opticalDefaultUnits = {"core_od":"mm", "cladding_od":"mm", "jacket_od":"mm", "weight/length":"kg/km"}
-        self.materialDefaultUnits = {"density":"g/mm^3", "strength":"GPa", "stress":"GPa", "elastic_modulus":"GPa", "min_temp":"C", 
+        self.materialDefaultUnits = {"density":"g/mm^3", "strength":"GPa", "stress":"GPa", "elastic_modulus":"GPa", "thermal_cond":"W/(m*K)", "min_temp":"C", 
                                      "max_temp":"C", "dielectric_strength":"V/mm", "resistivity":"ohm*mm"}
 
         # Set up a dictionary of the expected property columns in the material database #
-        self.material_prop_list = ["density", "strength", "modulus", "brittle_temp", "max_temp", "dielectric_strength", 
-                                   "dielectric_constant", "resistivity", "permeability"]
+        # self.material_prop_list = ["density", "strength", "modulus", "brittle_temp", "max_temp", "dielectric_strength", 
+        #                            "dielectric_constant", "resistivity", "permeability"]
 
         # Temp coefficients for common conductor materials #
         self.tempCoeffDict = {"silver":3.8e-3, "copper":3.9e-3, "gold":3.4e-3, "aluminum":3.9e-3, "tungsten":4.5e-3, 
@@ -557,8 +557,12 @@ def get_conv_func(defaultUnit):
         func = C_convert
     elif defaultUnit == "F":
         func = F_convert
+    elif defaultUnit == "K":
+        func = K_convert
     elif defaultUnit == "bar":
         func = bar_convert
+    elif defaultUnit == "W":
+        func = w_convert
     else:
         raise ValueError("Invalid default unit specified: %s !" % defaultUnit)
     
@@ -611,7 +615,16 @@ def F_convert(unit):
     elif(unit == "F"):
         multiplier = 1
     else:
-        raise ValueError("Unrecognized unit passed: %s! Valid units are: C, C" % unit)
+        raise ValueError("Unrecognized unit passed: %s! Valid units are: C, F" % unit)
+    
+    return multiplier
+
+def K_convert(unit):
+    if(unit == "K"):
+        multiplier = 1
+    else:
+        ### NOTE: This is a bandaid fix for now
+        raise ValueError("Unrecognized unit passed: %s! Valid units are: K" % unit)
     
     return multiplier
 
@@ -755,6 +768,34 @@ def v_convert(unit):
     else:
         raise ValueError("Unrecognized unit passed: %s ! Valid units are: V, mV, kV" % unit)
 
+    return multiplier
+
+def w_convert(unit):
+    """Function to return multiplier from a passed unit to W
+
+    Args:
+        unit (str): Unit to convert from
+
+    Raises:
+        ValueError: Unit to convert from has no entry
+
+    Returns:
+        float: Multiplier to convert from unit to W
+    """
+
+    multiplier = -1
+
+    if(unit == 'W'):
+        multiplier = 1
+    elif(unit == 'mW'):
+        multiplier = 0.001
+    elif(unit == 'kW'):
+        multiplier = 1000
+    elif(unit == 'MW'):
+        multiplier = 1e6
+    else:
+        raise ValueError("Unrecognized unit passed: %s ! Valid units are: W, mW, kW, MW" % unit)
+    
     return multiplier
 
 def kg_convert(unit):
