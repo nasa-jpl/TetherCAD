@@ -9,6 +9,10 @@ such information to foreign countries or providing access to foreign persons."
 If you have questions regarding this, please contact the JPL Software Release Authority at x4-2458.
 """
 
+
+# Sweep Modulation frequency (F_c) through a defined range (determines attenuation)
+#   Plot F_s & attenuation 
+
 import numpy as np
 from scipy import special
 from scipy.optimize import root_scalar
@@ -70,6 +74,43 @@ def determine_attenuation(tether, send_path, return_path, frequency, temp):
 
     return atten_dB * send_wire.length
 
+def characteristic_impedance(tether, send_path, return_path, frequency, temp):
+    """Calculates the characteristic impedance for two comm wires in a tether, at a given frequency and temperature. 
+
+    Args:
+        tether (RoundTetherDesign): Tether design object
+        send_path (string): Path within the tether design to find the send wire
+        return_path (string): Path within the tether design to find the return wire
+        frequency (int): Frequency of the comm system (Hz)
+        temp (float): Temperature of the conductors (C)
+
+    Returns:
+        float: Characteristic impedance NOTE: figure out units
+    """
+    
+    #TODO: Remove this once development is finished
+    warnings.warn("*** THIS FUNCTIONALITY IS UNDER DEVELOPMENT AND IS STILL UNVERIFIED! Make sure to verify results! ***", )
+
+    ### Grab the send and return wire objects ###s
+    send_wire = tether.getLayerAtPath(send_path)
+    return_wire = tether.getLayerAtPath(return_path)
+
+    ### Convert to angular frequency ###
+    omega = 2 * np.pi * frequency
+
+    ### Calculate RLCG parameters from tether geometry, materials and frequency (L, C, & G are asymptotic approx.) ###
+    R = resistance_parameter(send_wire, return_wire, frequency, temp)
+    L = inductance_parameter(send_wire, return_wire)
+    C = capacitance_parameter(send_wire, return_wire)
+    G = conductance_parameter(send_wire, return_wire)
+
+    ### Calculate the attenuation coefficient ###
+    imped = mp.sqrt((R + 1j * omega * L )/(G + 1j * omega * C))
+
+    return imped
+
+
+
 def watts_to_dBm(level):
     """Converts power in Watts to dBm
 
@@ -112,7 +153,7 @@ def snr(P, f_s, P_noise):
     Args:
         P (float): Received power level (dBm)
         f_s (float): Switching frequency (Hz)
-        P_noise (float): Noise power level (dBm)
+        P_noise (float): Noise power level (dBm/Hz)
 
     Returns:
         float: SNR 
@@ -122,6 +163,8 @@ def snr(P, f_s, P_noise):
     noise = dBm_to_watts(P_noise)
     E_s = P_tx/f_s
     return(E_s / noise)
+
+    # In general Ambient temp is -170 dBm/Hz 
 
 
 def ber(snr):
@@ -160,7 +203,7 @@ def calc_ook_datarate(P_dB, N_0, max_ber=1e-9):
     Args:
         P_dB (float): Power level at the receiver (dBm)
         N_0 (float): Noise power level (dBm)
-        max_ber (float, optional): Max acceptable BER. Defaults to 1e-6.
+        max_ber (float, optional): Max acceptable BER. Defaults to 1e-9.
         negative_low (bool, optional): Whether the logical low value is just negative high, or zero. Defaults to True.
 
     Returns:
@@ -199,12 +242,16 @@ def ook_datarate_analysis(tether, send_path, return_path, transmit_power, noise_
         float: The estimated max data rate at that BER (Mbps)
     """
 
+    # Method makes sense, make sure to check the carrier frequency is larger than the switching frequency 
+    # - Doesn't meeting the Nyquist rate 
+
     #TODO: Remove this once development is finished
     warnings.warn("*** THIS FUNCTIONALITY IS UNDER DEVELOPMENT AND IS STILL UNVERIFIED! Make sure to verify results! ***", )
 
     ### Specicy the tuple of arguments to pass to the objective function and calculated datarate upper limit ###
     argTup = (send_path, return_path, transmit_power, noise_power, tether, temp, max_ber)
-    upper_limit = calc_ook_datarate(argTup[2], argTup[3], max_ber=argTup[6])
+
+    upper_limit = calc_ook_datarate(argTup[2], argTup[3], max_ber=argTup[6]) 
 
     ### Use bisect method to find the root ###
     solution = root_scalar(ook_objective_fucn, args=(argTup), method='bisect', x0=0, bracket=[upper_limit, 1])
@@ -217,6 +264,7 @@ def ook_datarate_analysis(tether, send_path, return_path, transmit_power, noise_
         raise RuntimeError("Was unable to find a solution to the datarate analysis!")
 
 
+# only need send path
 def ook_objective_fucn(x, *args):
     """Objective function for On/Off Keying Datarate analysis, used by root-finding method
 
