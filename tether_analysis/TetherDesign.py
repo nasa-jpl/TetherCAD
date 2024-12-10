@@ -429,26 +429,36 @@ class Layer():
         member.x = coords[0]
         member.y = coords[1]
 
-    def layerDetails(self, recursive=False, tabNum=0):
+
+    def layerDetails(self, recursive=False, tabNum=0, output=True, breakdownList=None):
         """Prints the details of this layer, calling it for the next layer if desired. 
 
         Args:
             recursive (bool, optional): Whether to print the details of the layer below. Defaults to False.
             tabNum (int, optional): Number of tabs to indent the details of this layer. Defaults to 0.
         """
-        startStr = ''.join("   " for x in range(0, tabNum))
-        print(startStr + "Name: %s, Path (if set): %s" % (self.name, self.layerPath))
-        print(startStr + "Layer Dimensions:")
-        print(startStr + " - Inner Radius: %f mm" % self.innerRadius)
-        print(startStr + " - Outer Radius: %f mm" % self.outerRadius)
-        print(startStr + " - Layer Thickness: %f mm" % self.layerThickness)
-        if(len(self.memberList) > 0):
-            print(startStr + " - Equal Spacing: " + str(self.equalSpacing))
-            print(startStr + " - Member Number: %d" % len(self.memberList))
-            print(startStr + " - Member Start Radius: %f" %self.memberStartRadius)
+        if output:
+            startStr = ''.join("   " for x in range(0, tabNum))
+            print(startStr + "Name: %s, Path (if set): %s" % (self.name, self.layerPath))
+            print(startStr + "Layer Dimensions:")
+            print(startStr + " - Inner Radius: %f mm" % self.innerRadius)
+            print(startStr + " - Outer Radius: %f mm" % self.outerRadius)
+            print(startStr + " - Layer Thickness: %f mm" % self.layerThickness)
+            print(startStr + "Material: %s" % self.layerMaterial)
+            if(len(self.memberList) > 0):
+                print(startStr + " - Equal Spacing: " + str(self.equalSpacing))
+                print(startStr + " - Member Number: %d" % len(self.memberList))
+                print(startStr + " - Member Start Radius: %f" %self.memberStartRadius)
+        
+        if breakdownList is not None:
+            breakdownList.append([self.name, self.layerPath, self.layerMaterial, self.innerRadius, self.outerRadius, self.layerThickness, (self.x, self.y)])
 
         if recursive and self.innerLayer is not None:
-            self.innerLayer.layerDetails(recursive=True, tabNum=tabNum+2)
+            self.innerLayer.layerDetails(recursive=True, tabNum=tabNum+2, output=output, breakdownList=breakdownList)
+
+        if recursive:
+            for member in self.memberList:
+                member.layerDetails(recursive=True, tabNum=tabNum+2, output=output, breakdownList=breakdownList)    
 
     def illustrate(self, ax=None, borderless=False, figdim=5):
         """Illustrates this layer using matplotlib
@@ -1007,22 +1017,23 @@ class RoundTetherDesign():
 
 
 
-    def tetherDetails(self, recursive=False):
+    def tetherDetails(self, recursive=False, output=True, breakdownList=None):
         """Prints the details of the tether.
 
         Args:
             recursive (bool, optional): Prints the details of each layer recursively if desired. Defaults to False.
         """
-        print("--- %s Round Tether Details ---" % self.name)
-        print("  Tether Length: %f m" % self.length)
-        print("  Tether Diameter: %f mm" % self.layer.outerDiameter)
-        print("  Tether Radius: %f mm" % self.layer.outerRadius)
-        print("  Tether Mass: %f g" % self.mass)
-        print("  Strength Bounds: {} N, {} N".format(self.strengthLowerBound, self.strengthUpperBound))
-        print("  Min Bend Radius: {} mm".format(self.minBendRadius))
+        if(output):
+            print("--- %s Round Tether Details ---" % self.name)
+            print("  Tether Length: %f m" % self.length)
+            print("  Tether Diameter: %f mm" % self.layer.outerDiameter)
+            print("  Tether Radius: %f mm" % self.layer.outerRadius)
+            print("  Tether Mass: %f g" % self.mass)
+            print("  Strength Bounds: {} N, {} N".format(self.strengthLowerBound, self.strengthUpperBound))
+            print("  Min Bend Radius: {} mm".format(self.minBendRadius))
 
         if recursive:
-            self.layer.layerDetails(recursive=True, tabNum=1)
+            self.layer.layerDetails(recursive=True, tabNum=1, output=output, breakdownList=breakdownList)
 
     def illustrate(self, borderless=False, figdim=5):
         """Illustrates a given tether design.
