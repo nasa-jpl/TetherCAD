@@ -1269,6 +1269,38 @@ class RoundTetherDesign():
         return break_force
 
 
+    def thermalReport(self):
+        """Prints out properties useful to performing a thermal analysis on the tether design. 
+        
+        Properties printed include the name, path, material, thermal conductivity, dimensions, and position of each layer in the tether.
+        
+        Args: None
+        
+        Returns: None
+        """
+        
+        breakdownList = []
+        self.tetherDetails(recursive=True, output=False, breakdownList=breakdownList)
+        
+        # [self.name, self.layerPath, self.layerMaterial, self.innerRadius, self.outerRadius, self.layerThickness, (self.x, self.y)]
+        
+        for entry in breakdownList:
+            material_entry = databases.get_material_entry(entry[2])
+            thermal_cond = DB.get_material_property(material_entry, "thermal_cond")
+            min_temp = DB.get_material_property(material_entry, "min_temp")
+            max_temp = DB.get_material_property(material_entry, "max_temp")
+            print("Layer: %s, Path: %s" % (entry[0], entry[1]))
+            print("  - Material: %s, Thermal Conductivity: %f W/(m*K)" % (entry[2], thermal_cond))
+            print("  - Min Temp: %f C, Max Temp: %f C" % (min_temp, max_temp))
+            print("  - Dimensions:")
+            print("     - Inner Radius: %f mm" % entry[3]) 
+            print("     - Outer Radius Radius: %f mm"% entry[4]) 
+            print("     - Thickness: %f mm"% entry[5]) 
+            print("  - Centered at: (%f, %f)" % (entry[6][0], entry[6][1]))
+            print("\n")
+
+
+
     def findWires(self, wireType):
         """Returns the path of all wires found in the tether
 
