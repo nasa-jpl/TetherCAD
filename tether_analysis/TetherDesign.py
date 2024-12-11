@@ -444,6 +444,7 @@ class Layer():
             print(startStr + " - Inner Radius: %f mm" % self.innerRadius)
             print(startStr + " - Outer Radius: %f mm" % self.outerRadius)
             print(startStr + " - Layer Thickness: %f mm" % self.layerThickness)
+            print(startStr + "Layer Length: %f m (This will be zero until assigned by a tether design object)" % self.length)
             print(startStr + "Material: %s" % self.layerMaterial)
             if(len(self.memberList) > 0):
                 print(startStr + " - Equal Spacing: " + str(self.equalSpacing))
@@ -451,7 +452,7 @@ class Layer():
                 print(startStr + " - Member Start Radius: %f" %self.memberStartRadius)
         
         if breakdownList is not None:
-            breakdownList.append([self.name, self.layerPath, self.layerMaterial, self.innerRadius, self.outerRadius, self.layerThickness, (self.x, self.y)])
+            breakdownList.append([self.name, self.layerPath, self.layerMaterial, self.innerRadius, self.outerRadius, self.layerThickness, (self.x, self.y), self.length])
 
         if recursive and self.innerLayer is not None:
             self.innerLayer.layerDetails(recursive=True, tabNum=tabNum+2, output=output, breakdownList=breakdownList)
@@ -656,6 +657,7 @@ class Layer():
                     actLength = helixLen * numArcs * mm_to_m_mult
 
                     member.assignLayerLengths(actLength)
+
 
                 
     def countLayers(self, list=None):
@@ -1453,7 +1455,8 @@ class RoundTetherDesign():
         # Assign coordinates for the new member and update encapsulated layers # 
         newMem.x = x
         newMem.y = y
-        newMem.polarCords = cart_to_polar([newMem.x, newMem.y])
+        newMem.polarCoords = cart_to_polar([newMem.x, newMem.y])
+        
         newMem.update_member_positions()
         
         # Add it to the list and then make sure all paths are up-to-date # 
