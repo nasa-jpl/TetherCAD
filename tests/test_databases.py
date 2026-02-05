@@ -132,7 +132,7 @@ class TestDatabaseControl:
     def test_invalid_wire_type(self, wire_database):
         
         with pytest.raises(ValueError):
-            databaseCtrl.process_database(wire_database[1], wire_type="impossible")
+            databaseCtrl.process_wire_database(wire_database[1], wire_type="impossible")
 
     @pytest.mark.usefixtures("wire_database")
     def test_missing_unit_process(self, wire_database):
@@ -141,7 +141,7 @@ class TestDatabaseControl:
         wire_database[1].iloc[0, 6] = None
 
         with pytest.raises(ValueError):
-            databaseCtrl.process_database(wire_database[1])
+            databaseCtrl.process_wire_database(wire_database[1])
 
         wire_database[1].iloc[0, 6] = temp
 
@@ -222,7 +222,7 @@ class TestDatabaseHelpers:
     @pytest.mark.usefixtures("optical_database")
     def test_valid_entry_returned(self, optical_database):
 
-        db = databaseCtrl.process_database(optical_database[1], wire_type="optical")
+        db = databaseCtrl.process_wire_database(optical_database[1], wire_type="optical")
 
         entry1 = db[(db["Part #"] == "LINDEN-SPE-7210") & (db["type"] == "multimode")]
         entry2 = searchEntry(databaseCtrl.optical_db_dict["LindenPhotonics-RadHard-2023"],

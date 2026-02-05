@@ -249,7 +249,29 @@ def skin_depth(rho, f, mu_c):
     return np.sqrt(rho / (np.pi * f * mu_c)) 
 
 
-def dc_power_transmission_analysis(tether, tether_voltage, desired_power, send_paths, return_paths, print_results=True, 
+def dc_resistance(tether, send_paths, return_paths, temp=20):
+  
+    # Check for duplicates, note that this may need to change if coaxial designs are introduced #
+    for path in send_paths:
+        if path in return_paths:
+            raise RuntimeError("The path %s is present in both lists! A single path cannot be both a send and return!")
+
+    # Build lists of wires for send/return paths from names #
+    send_path_wires = tether.buildLayerList(send_paths)
+    return_path_wires = tether.buildLayerList(return_paths)
+    if(len(send_path_wires) < 1):
+        raise ValueError("Send path wires were not found in passed tether design!")
+    if(len(return_path_wires) < 1):
+        raise ValueError("Return path wires were not found in passed tether design!")
+
+    # Calculate the equivalent resistance for the send and return paths #
+    send_resistance_eq = calculate_equivalent_resistance(send_path_wires, temp)
+    return_resistance_eq = calculate_equivalent_resistance(return_path_wires, temp)
+    total_eq_resistance = send_resistance_eq + return_resistance_eq
+    
+    return total_eq_resistance
+    
+def dc_power_transmission_analysis(tether, tether_voltage, desired_power, send_paths, return_paths, print_results=True, print_all_sols=False, 
                                    temp=20, verbose=False, analysis_name = ""):
     """Determines the DC power transmission characteristics of a given tether by stepping up the input power until the 
        desired output power is determined.
@@ -320,13 +342,17 @@ def dc_power_transmission_analysis(tether, tether_voltage, desired_power, send_p
     # If we don't have any real solutions throw an error # 
     if len(solutions) < 1:
         current = (min(roots))
-        raise ValueError("Solution cannot be found with given parameters! Tether Voltage drop is likely too high!") 
+        # raise ValueError("Solution cannot be found with given parameters! Tether Voltage drop is likely too high!") 
+        print("Solution cannot be found with given parameters! Tether Voltage drop is likely too high!") 
+        return []
 
     # Sort solutions in increasing order, the first will be the more stable #
     solutions = sorted(solutions)
 
     efficiencyList = []
 
+
+    solution_specs = []
     for idx, current in enumerate(solutions):
 
         voltage_drop_send = current * send_resistance_eq
@@ -365,7 +391,7 @@ def dc_power_transmission_analysis(tether, tether_voltage, desired_power, send_p
                 return_power_disp_dict[wire.layerPath] = wire_power_loss / tether.length
                 
         # Print results if desired #
-        if(print_results):
+        if(print_results and (idx < 1 or print_all_sols)):
             
             # Print stability of solution (as long as inputs are rational, we'll always have two or 0 solutions) # 
             stabStr = "More Stable Solution"
@@ -403,11 +429,21 @@ def dc_power_transmission_analysis(tether, tether_voltage, desired_power, send_p
             print("     - Tether Power Efficiency:  %.2f %%" % tether_power_efficiency)
             print("     - Power Dissipation:        %f W/m" % ((power_loss_send + power_loss_return) / tether.length))
             print("\n")
-
-        efficiencyList.append(tether_power_efficiency)
+            
+        # efficiencyList.append(tether_power_efficiency)
+        spec = {"voltage_drop" : voltage_drop_send + voltage_drop_return,
+               "input_power" : input_power,
+               "output_power" : power_transmitted,
+               "total_loss" : power_loss_send + power_loss_return,
+               "tether_loss_send" : power_loss_send,
+               "tether_loss_return" : power_loss_return,
+               "tether_current" : current,
+               "efficiency" : tether_power_efficiency, 
+               "power_dissipation" : ((power_loss_send + power_loss_return) / tether.length)}
+        solution_specs.append(spec)
 
     #TODO: add the ability to return all of these calculated parameters
-    return efficiencyList
+    return solution_specs
 
 def single_phase_ac_transmission_analysis(tether, tether_voltage_rms, desired_power, send_paths, return_paths, print_results=True, 
                                    temp=20, frequency=60, verbose=False, analysis_name = ""):

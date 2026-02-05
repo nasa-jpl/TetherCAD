@@ -22,21 +22,34 @@ class DatabaseControl:
     """
 
     _self = None
+    _initialized = False
 
     # Only one instance is allowed across the entire process #
-    def __new__(cls,):
+    def __new__(cls, **kwargs):
         if cls._self is None:
             cls._self = super().__new__(cls)
+        
         return cls._self
 
-    def __init__(self, path=None):
+    def __init__(self, path=None, reinit=False):
         """Database constructor, loads all of the databases if can find within the specified or default path
 
         Args:
             path (str, optional): Path in which to look for the material and wire databases. Defaults to None.
         """
+
+        # Singleton initializtion logic        
+        if not self._initialized:
+            self._initialized = True
+        else:
+            if reinit == False:
+              return
+        
         self.wire_db_list = []
         self.wire_db_dict = {}
+
+        self.conductor_db_list = []
+        self.conductor_db_dict = {}
 
         self.optical_db_list = []
         self.optical_db_dict = {}
@@ -68,7 +81,8 @@ class DatabaseControl:
             self.dbPath = pathlib.Path(path)
 
         # Load material database #
-        self.material_db = None
+        self.material_db_list = []
+        self.material_db_dict = {}
 
         # Look for valid databases in the database path #
         for files in os.listdir(self.dbPath):
@@ -77,15 +91,26 @@ class DatabaseControl:
             if(files.endswith(".csv") and "_" in files):
                 filename = re.findall(r'^(.+?)_', files)[0]
                 location = self.dbPath / files
+                print("Reading database %s" % filename)
                 curr_database = pd.read_csv(location).replace(np.nan, None, regex=True)
             else:
                 continue
 
             # Process as a wire database #
+            if files.endswith('_ConductorDB.csv'):
+
+                # Process Database
+                updated_db = self.process_wire_database(curr_database)
+
+                # Add database to internal wire record #
+                self.conductor_db_list.append(filename)
+                self.conductor_db_dict[filename] = updated_db
+
+            # Process as a wire database #
             if files.endswith('_WireDB.csv') and 'Template' not in files:
 
                 # Process Database as a wire database#
-                updated_db = self.process_database(curr_database)
+                updated_db = self.process_wire_database(curr_database)
 
                 # Add database to internal wire record #
                 self.wire_db_list.append(filename)
@@ -95,7 +120,7 @@ class DatabaseControl:
             elif files.endswith('_OpticalDB.csv') and 'Template' not in files:
 
                 # Process Database as an optical database #
-                updated_db = self.process_database(curr_database, wire_type="optical")
+                updated_db = self.process_wire_database(curr_database, wire_type="optical")
 
                 # Add database to internal optical record #
                 self.optical_db_list.append(filename)
@@ -103,7 +128,13 @@ class DatabaseControl:
 
             # Process as a material database #
             elif files.endswith('material_DB.csv'): 
-                self.material_db = self.process_material_database(curr_database)
+                db = self.process_material_database(curr_database)
+                
+                # Replace any NaNs with None (Stuff can be weird when loading/accessing dataframes after initialization)
+                db.replace(np.nan, None, inplace=True)
+                
+                self.material_db_list.append(filename)
+                self.material_db_dict[filename] = db
 
             else:
                 continue
@@ -171,7 +202,7 @@ class DatabaseControl:
 
 
         
-    def process_database(self, db, wire_type="wire"):
+    def process_wire_database(self, db, wire_type="wire"):
         """Processes wire databases to have the correct units and fill any missing
         information. 
 
@@ -229,6 +260,31 @@ class DatabaseControl:
     def add_override_material(self, material_entry):
         pass
 
+    def find_material(self, material):
+      for filename,db in self.material_db_dict.items():
+          # Grab the desired material entry #
+          foundEntry = searchEntry(db, {"material_name":material})  
+          if not foundEntry.empty:
+            break
+      
+      if foundEntry.empty:
+        return None, None
+      else:
+        return foundEntry, filename
+      
+    def add_temp_material(self, material_entry):
+      temp_name = 'temp_db'
+      temp_db = self.material_db_dict.get(temp_name, None)
+      
+      if temp_db is None:
+        temp_db = pd.DataFrame(material_entry)
+        self.material_db_dict[temp_name] = temp_db
+        self.material_db_list.append(temp_name)
+      else:
+        searchEntry(temp_db, {'material_name': material_entry['material_name']})
+        pd.concat([temp_db, material_entry], ignore_index=True)
+        
+
     def get_material_entry(self, material, fill_missing=True):
         """Returns a corresponding material entry from the material database. 
 
@@ -248,54 +304,54 @@ class DatabaseControl:
             filled from a representative material type. 
         """
         
-        # Replace any NaNs with None (Stuff can be weird when loading/accessing dataframes after initialization)
-        self.material_db.replace(np.nan, None, inplace=True)
-
-        # Grab the desired material entry #
-        foundEntry = searchEntry(self.material_db, {"material_name":material})
-        if foundEntry.empty:
-            raise ValueError("Passed material: %s not found in material database!" % material)
+        
+        foundEntry, _ = self.find_material(material)
+        
+        if foundEntry is None:          
+          raise ValueError("Passed material: %s not found in material databases!" % material)
         
         # Create a copy to avoid messing with the actual dataframe #
         entry = foundEntry.copy(deep=True)
 
-        # Grab the fill entry based on the material type #
-        material_type = entry["material_type"].item()
-        type_entry = searchEntry(self.material_db, {"material_name":material_type})
-
-        if type_entry.empty:
-            raise ValueError("Invalid material type of %s specified for %s!" % (material_type, material))
-
         # Replace any values if necessary and issue a warning #
         if fill_missing:
+          
+            # Grab the fill entry based on the material type #
+            material_type = entry["material_type"].item()
+            # type_entry = searchEntry(self.material_db, {"material_name":material_type})
+            type_entry, _ = self.find_material(material_type)
+  
+            if type_entry.empty:
+                raise ValueError("Invalid material type of %s specified for %s!" % (material_type, material))
+            
             replaced_list = []
             for col in entry:
-
+  
                 # Ignore unit columns #
                 if "_unit" in col:
                     continue
-
+  
                 # If we don't have a value for this portion #
                 if entry[col].iloc[0] is None:
                     
                     # Add it to the list of missing types #
                     replaced_list.append(col)
                     unit_col = col + "_unit"
-
+  
                     reprEntryUnit = None                
-
+  
                     # Double check the material entry isn't missing this value #
                     if (reprEntry := type_entry[col].item()) is None:
                         raise ValueError("Material type: %s is missing a value for: %s" % (material_type, col))
-
+  
                     # Only add a unit if we have a unit column for it #
-                    if unit_col in self.material_db.columns:
+                    if unit_col in self.material_db_dict[self.material_db_list[0]].columns:
                         if (reprEntryUnit := type_entry[unit_col].item()) is None:
                             raise ValueError("Material type: %s is missing a unit for: %s" % (material_type, unit_col))
-
+  
                     # Set the entry to the representative value #
                     entry[col] = reprEntry
-
+  
                     # As long as we have a unit to update, add it #
                     if reprEntryUnit is not None:
                         entry[unit_col] = reprEntryUnit

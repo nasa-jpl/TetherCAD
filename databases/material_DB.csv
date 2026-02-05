@@ -5,7 +5,7 @@ metal,metal,8.9588,g/cm^3,148.625,MPa,197.467,MPa,74.9125,GPa,277.74,W/(m*K),-27
 ferromagnetic,ferromagnetic,8.2067,g/cm^3,508.33,MPa,59,MPa,201,GPa,277.74,W/(m*K),-273.15,C,1476.667,C,0,kV/mm,inf,0.000000108,ohm*cm,2533.33,grey,Averaged values for a number of metals filled in for different sources. Used to fill in missing values for standard ferrous metals,Matweb and other databases
 glass,glass,2.2,g/cm^3,7,MPa,7,MPa,73,GPa,0.893,W/(m*K),-80,C,180,C,30,kV/mm,3.82,1.00E+11,ohm*cm,1,lavender,"Used values for glass, assumed stress is approx. UTS",Matweb and other databases
 aramid,aramid,1.133,g/cm^3,3449.74,MPa,3449.74,MPa,97.36,GPa,0.77,W/(m*K),-192.28,C,244,C,40.75,kV/mm,2.55,3.05E+16,ohm*cm,1,navajowhite,,Matweb and other databases
-air,air,0,kg/m^3,0,MPa,0,MPa,0,GPa,25.72,mW/(m*K),0,C,0,C,0,kV/mm,0,0.00E+00,ohm*cm,0,white,"Thermal conductivity at 1bar, 18C ",
+air,air,0,kg/m^3,0,MPa,0,MPa,0,GPa,25.72,mW/(m*K),0,C,0,C,3,kV/mm,0,0.00E+00,ohm*cm,0,white,"Thermal conductivity at 1bar, 18C ",
 silica,glass,2.2,g/cm^3,,,,,73,GPa,1.38,W/(m*K),,,,,30,kV/mm,3.82,1.00E+11,ohm*cm,0,lavender,,http://accuratus.com/fused.html
 acrylic_low,polymer,1.18,g/cm^3,62,MPa,40,MPa,2.76,GPa,0.187,W/(m*K),-40,C,70,C,17,kV/mm,2.5,1.00E+15,ohm*cm,,skyblue,,https://www.matweb.com/search/datasheet.aspx?bassnum=O1303&ckck=1
 acrylic_high,polymer,1.19,g/cm^3,83,MPa,110,MPa,3.3,GPa,0.209,W/(m*K),-32.2,C,200,C,30,kV/mm,4,1.00E+17,ohm*cm,,skyblue,"When more than one reading specified, took the lower one",https://www.matweb.com/search/datasheet.aspx?bassnum=O1303&ckck=1

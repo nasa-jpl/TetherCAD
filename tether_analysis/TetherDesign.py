@@ -17,7 +17,6 @@ from copy import deepcopy
 import warnings
 import re
 
-
 import databases.DatabaseControl as DB
 
 databases = DB.DatabaseControl()
@@ -56,6 +55,8 @@ class Layer():
         if name is None or name == "":
             raise ValueError("A name must be specified for this layer!")
 
+        self.parent = None
+
         self.innerRadius = 0                # (mm)
         self.memberStartRadius = 0          # (mm)
         self.outerRadius = 0                # (mm)
@@ -64,6 +65,7 @@ class Layer():
         self.layerMass = 0                  # (kg)
         self.layerThickness = thickness     # (mm)
         self.helixAngle = helixAngle        # (degrees)
+        self.memberHelixLead = 0            # mm / turn
         self.length = 0                     # (m) Used by RoundTetherDesign
         self.layerID = 0                    
         self.x = 0
@@ -78,6 +80,7 @@ class Layer():
 
         # Material of layer #
         self.layerMaterial = material
+        self.material_entry = databases.get_material_entry(self.layerMaterial)
 
         # A name of the layer, can be used to discern in the details printout #
         self.name = name
@@ -98,6 +101,9 @@ class Layer():
             self.innerLayer = deepcopy(innerLayer)
         else:
             self.innerLayer = innerLayer
+        
+        if self.innerLayer is not None:
+          self.innerLayer.parent = self
 
         # Do some member specific actions if any were passed #
         if(memberList is not None):
@@ -111,7 +117,7 @@ class Layer():
             # Make size layer thickness to be enough to cover the largest member #
             self.minThickness = 0
             for member in self.memberList:
-
+                member.parent = self
                 if 2 * member.outerRadius > self.minThickness:
                     self.minThickness = member.outerDiameter
 
@@ -130,6 +136,16 @@ class Layer():
 
         self.check_layer_collisions()
 
+    def __str__(self, indent_level=0):
+        string = indent_level*'  ' + self.name
+        if len(self.memberList) > 0 or self.innerLayer is not None:
+          string += '\n'
+        for member in self.memberList:
+          string += member.__str__(indent_level+1)
+          string += '\n'
+        if self.innerLayer is not None:
+          string += self.innerLayer.__str__(indent_level+1)
+        return string
 
     def _setLayerDimensions(self):
         """Define the dimensions of the layer from the thickness and inner radius. 
@@ -142,6 +158,26 @@ class Layer():
         self.innerDiameter = 2 * self.innerRadius
         self.outerDiameter = 2 * self.outerRadius
 
+
+    def contains(self, layer):
+      
+      if layer.layerPath.startswith(self.layerPath):
+        return True
+      
+      self_part = self.layerPath.rpartition('L')
+      layer_part = layer.layerPath.rpartition('L')
+      
+      if self_part[1] == 'L' and layer_part[1] == 'L':
+        if self_part[0] == layer_part[0] and int(self_part[2]) < int(layer_part[2]):
+          return True
+        else:
+          return False
+      else:
+        print("Error, invalid path format: %s and %s" % (self.layerPath, layer.layerPath))
+      
+      
+      
+      
 
     def define_layer_geometry(self, step=0.001):
         """Defines the geometry of the layer, sizing things to be appropriate if necessary. 
@@ -450,6 +486,23 @@ class Layer():
         if recursive and self.innerLayer is not None:
             self.innerLayer.layerDetails(recursive=True, tabNum=tabNum+2)
 
+    def enumerateLayers(self):
+      """Returns a list of all layers in the tether
+      """
+      layerList = []
+      layerStack = [self]
+      
+      while(len(layerStack) > 0):
+        l = layerStack.pop()
+        if len(l.memberList) > 0:
+          layerStack += l.memberList
+        if l.innerLayer is not None:
+          layerStack.append(l.innerLayer)
+        layerList.append(l)
+      
+      return layerList
+      
+      
     def illustrate(self, ax=None, borderless=False, figdim=5):
         """Illustrates this layer using matplotlib
 
@@ -468,7 +521,8 @@ class Layer():
 
         # Set our color from the material property #
         if self.color is None:
-            material_entry = DB.searchEntry(databases.material_db, {'material_name':self.layerMaterial.lower()})
+            # material_entry = DB.searchEntry(databases.material_db, {'material_name':self.layerMaterial.lower()})
+            material_entry = self.material_entry
             if material_entry.empty:
                 warnings.warn("Unable to find specified material: %s! Using white as the color!" % 
                               self.layerMaterial.lower())
@@ -481,8 +535,20 @@ class Layer():
         if (borderless):
             width = 0
 
+        hatch=None
+        if self.fillRatio < 1.0:
+          if len(self.memberList) < 1:
+            if self.material_entry['resistivity'].values[0] < 10:
+              hatch = 'OO'
+            else:
+              hatch = 'XX'
+          else:
+            hatch = '.'
+        
+        
         circle = matplotlib.patches.Circle(
-            (self.x, self.y), radius=self.outerRadius, facecolor=self.color, edgecolor="black", linewidth=width)
+            (self.x, self.y), radius=self.outerRadius, facecolor=self.color, edgecolor="black", linewidth=width, hatch=hatch)
+        circle._hatch_color = (.5, .5, .5)
         ax.add_patch(circle)
 
         # Draw any helixed members #
@@ -515,6 +581,31 @@ class Layer():
         self.assignLayerLengths(length)
         return self._calcLayerMass(breakDownList=breakDownList)
 
+    def _calcFillLength(self):
+      
+        # Length adjustment for helixed fill 
+        if(self.helixAngle != 90):
+            if(self.helixAngle == 0):
+                raise ValueError("The helix angle must have a positive, nonzero value!")
+      
+        if self.helixAngle == 90:
+          return self.length
+        
+        m_to_mm_mult = 1000
+        mm_to_m_mult = .001
+        
+        length_mm = self.length * m_to_mm_mult 
+        # Calculate "lead" of the helixed fill # 
+        startCircumference = (self.outerRadius - self.innerRadius) * np.pi
+        fillLead = startCircumference * np.tan(np.deg2rad(self.helixAngle))
+
+        # Calculate the length of the helixed fill #
+        numArcs = length_mm / fillLead 
+        helixLen = np.sqrt(fillLead ** 2 + startCircumference ** 2)
+        length_mm = helixLen * numArcs
+        
+        return length_mm * mm_to_m_mult
+
     def _calcLayerMass(self, breakDownList=None):
         """Performs the mass calculation for this layer, calling its corresponding function for all layers below it. 
 
@@ -529,7 +620,8 @@ class Layer():
         """
 
         # Grab the density of the material and the multiplier for the length, throwing an error if not found #
-        material_entry = DB.searchEntry(databases.material_db, {'material_name':self.layerMaterial.lower()})
+        # material_entry = DB.searchEntry(databases.material_db, {'material_name':self.layerMaterial.lower()})
+        material_entry = self.material_entry
         if material_entry.empty:
             raise ValueError("Unable to find specified material: %s!" % self.layerMaterial)
 
@@ -538,22 +630,10 @@ class Layer():
         m_to_mm_mult = DB.build_multiplier("m", "mm")
 
         # Set length variables in terms of mm and m for readability #
-        length_mm = self.length * m_to_mm_mult 
-        fill_length = self.length 
+        # length_mm = self.length * m_to_mm_mult 
+        # fill_length = self.length 
 
-        # Length adjustment for helixed fill 
-        if(self.helixAngle != 90):
-            if(self.helixAngle == 0):
-                raise ValueError("The helix angle must have a positive, nonzero value!")
-
-            # Calculate "lead" of the helixed fill # 
-            startCircumference = (self.outerRadius - self.innerRadius) * np.pi
-            fillLead = startCircumference * np.tan(np.deg2rad(self.helixAngle))
-
-            # Calculate the length of the helixed fill #
-            numArcs = length_mm / fillLead 
-            helixLen = np.sqrt(fillLead ** 2 + startCircumference ** 2)
-            length_mm = helixLen * numArcs
+        length_mm = self._calcFillLength() * m_to_mm_mult
 
         totalVolume = (self.outerRadius**2 - self.innerRadius**2) * np.pi * length_mm * self.fillRatio
 
@@ -631,7 +711,9 @@ class Layer():
                     # Update the max lead #
                     if memberLead > maxLead:
                         maxLead = memberLead
-
+                        
+                self.memberHelixLead = maxLead
+                # print(maxLead)
                 # Use each member's lead to calculate the actual length #
                 for member in self.memberList:
                     
@@ -641,11 +723,16 @@ class Layer():
                                          (self.helixAngle, member.outerDiameter, memberLead))
 
                     # Calculate the # of distinct arcs in the tether, and adjust the length for each arc #
-                    numArcs = length_mm / maxLead 
+                    numArcs = length_mm / maxLead
+                    startCircumference = member.polarCoords[0] * 2 * np.pi
                     helixLen = np.sqrt(maxLead ** 2 + startCircumference ** 2)
                     actLength = helixLen * numArcs * mm_to_m_mult
 
                     member.assignLayerLengths(actLength)
+                    # print("Layer: %s" % member.name)
+                    # print("Circumference: %f" % startCircumference)
+                    # print("HelixLen: %f" % helixLen)
+                    # print("Adjusted Len: %f" % actLength)
 
                 
     def countLayers(self, list=None):
@@ -728,17 +815,32 @@ class Layer():
         if self.innerLayer is not None:
             self.innerLayer.printLayerPaths()
 
+    def addMember(self, member, x, y):
+        newMem = deepcopy(member)
 
-    def __eq__(self, other) : 
-        """Allows comparison of object to others using the == operator. Checks for equality not identicality. 
+        # Assign coordinates for the new member and update encapsulated layers # 
+        newMem.x = x
+        newMem.y = y
+        newMem.polarCoords = cart_to_polar([newMem.x, newMem.y])
+        newMem.update_member_positions()
+        
+        self.memberPosition.append([x, y])
+        
+        # Add it to the list and then make sure all paths are up-to-date # 
+        self.memberList.append(newMem)
 
-        Args:
-            other (Layer): Object to compare against
+    # def __eq__(self, other) : 
+    #     """Allows comparison of object to others using the == operator. Checks for equality not identicality. 
 
-        Returns:
-            bool: Whether ALL object attributes equal the other
-        """
-        return self.__dict__ == other.__dict__
+    #     Args:
+    #         other (Layer): Object to compare against
+
+    #     Returns:
+    #         bool: Whether ALL object attributes equal the other
+    #     """
+    #     return self.__dict__ == other.__dict__
+
+
 
 
 class Wire(Layer):
@@ -991,20 +1093,26 @@ class RoundTetherDesign():
         self.radius = self.layer.outerRadius           # (mm)
         
         # Calculate lengths and estimate mass, MBR, and strength
-        self._calculateMechanicalProperties()
+        self._calculateMassProperties()
 
-    def _calculateMechanicalProperties(self):
+
+    def __str__(self):
+        string = ''
+        string += "RoundTether \n"
+        string += str(self.layer)
+        return string
+
+    
+    def __repr__(self):
+      return str(RoundTetherDesign) + " at " + str(hex(id(self))) + '\n' + self.__str__()
+
+    def _calculateMassProperties(self):
         """ Calculates mechanical properties of tether on construction or on updates. 
         """
         # Geometry and physical properties #
         self.layer.assignLayerLengths(self.length)
         self.mass = self.calculateMass()
-        self.minBendRadius = self.calculateMinBendRadius()
-
-        # Find strength values #
-        self.strengthUpperBound = self.unhelixStrength(output=False)
-        self.strengthLowerBound = self.straightRunStrength(output=False)
-
+        
 
 
     def tetherDetails(self, recursive=False):
@@ -1013,18 +1121,27 @@ class RoundTetherDesign():
         Args:
             recursive (bool, optional): Prints the details of each layer recursively if desired. Defaults to False.
         """
+        
+        
+        # Find strength and MBR
+        import calculation_libraries.MechAnalysis as MA
+        minBendRadius = MA.calculateMinBendRadius(self)
+        strengthUpperBound = MA.unhelixStrength(self, output=False)
+        strengthLowerBound = MA.straightRunStrength(self, output=False)
+        
         print("--- %s Round Tether Details ---" % self.name)
         print("  Tether Length: %f m" % self.length)
         print("  Tether Diameter: %f mm" % self.layer.outerDiameter)
         print("  Tether Radius: %f mm" % self.layer.outerRadius)
         print("  Tether Mass: %f g" % self.mass)
-        print("  Strength Bounds: {} N, {} N".format(self.strengthLowerBound, self.strengthUpperBound))
-        print("  Min Bend Radius: {} mm".format(self.minBendRadius))
+        print("  Unit Mass: %f g/m" % (self.mass/self.length))
+        print("  Strength Bounds: {} N, {} N".format(strengthLowerBound, strengthUpperBound))
+        print("  Min Bend Radius: {} mm".format(minBendRadius))
 
         if recursive:
             self.layer.layerDetails(recursive=True, tabNum=1)
 
-    def illustrate(self, borderless=False, figdim=5):
+    def illustrate(self, ax=None, borderless=False, figdim=5):
         """Illustrates a given tether design.
 
         Args:
@@ -1032,39 +1149,15 @@ class RoundTetherDesign():
             figdim (int, optional): Dimension of each side of the figure (inches). Defaults to 5.
         """
 
-        self.layer.illustrate(borderless=borderless, figdim=figdim)
+        self.layer.illustrate(ax=ax, borderless=borderless, figdim=figdim)
+        
+        if ax is not None:
+          lim = self.layer.outerRadius * 1.25
+          plt.xlim([-lim, lim])
+          plt.ylim([-lim, lim])
+          plt.show()
 
 
-    def calculateMinBendRadius(self):
-        """Calculates the minimum bend radius of the tether in mm.
-        Based on rules of thumb from:
-         https://www.thefoa.org/tech/ref/install/bend_radius.html#:~:text=The%20normal%20recommendation%20for%20fiber,10%20times%20the%20cable%20diameter
-         https://www.anixter.com/en_us/resources/literature/wire-wisdom/minimum-bend-radius.html
-
-        """
-
-        tetherRule = 8 * self.diameter
-
-        elecPaths = self.findWires("electrical")
-        fiberPaths = self.findWires("optical")
-
-        maxWireOD = 0
-        maxFiberOD = 0
-
-        for path in elecPaths:
-            wire = self.getLayerAtPath(path)
-            if wire.outerDiameter > maxWireOD:
-                maxWireOD = wire.outerDiameter
-
-        for path in fiberPaths:
-            fiber = self.getLayerAtPath(path)
-            if fiber.outerDiameter > maxFiberOD:
-                maxFiberOD = fiber.outerDiameter
-
-        wireRule = 12 * maxWireOD
-        fiberRule = 20 * maxFiberOD # TODO add Curtis's math (ask for source)
-
-        return max(tetherRule, wireRule, fiberRule)
 
 
     def calculateMass(self, breakdown=False, verbose=False):
@@ -1096,166 +1189,7 @@ class RoundTetherDesign():
             return mass
         
 
-    def straightRunStrength(self, output=True, verbose=False):
-        """Calculates the strength of the tether in newtons, assuming
-        that all materials see load immediately. 
-
-        Returns:
-            float: The strength in newtons. 
-        """
-        
-        tetherLayers = []
-        self.layer.countLayers(list=tetherLayers)
-
-        min_strain = np.inf
-        eff_spring_const = 0
-
-        layerDict = {}
-
-        for layer in tetherLayers:
-            
-            # Grab yield stress and young's modulus #
-            material_entry = databases.get_material_entry(layer.layerMaterial)
-            yield_stress = DB.get_material_property(material_entry, "stress")
-            young_mod = DB.get_material_property(material_entry, "elastic_modulus")
-
-            if young_mod == 0:
-                continue
-            
-            # Calculate strain, and update min strain #
-            strain = yield_stress / young_mod
-            if strain < min_strain:
-                min_strain = strain
-
-            # Calculate the cross sectional area of the layer #
-            mm_to_m = DB.build_multiplier("mm^2", "m^2")
-            csa = (layer.outerRadius**2 - layer.innerRadius**2) * np.pi * mm_to_m * layer.fillRatio * np.sin(np.radians(layer.helixAngle))
-
-            # Calculate the spring constant for the layer (young's * cross section) #
-            gpa_to_pa = 1 / DB.build_multiplier("Pa", "GPa")
-            spring_const = young_mod * csa * gpa_to_pa
-            eff_spring_const += spring_const
-
-            layerDict[layer.layerPath] = [layer.name, layer.layerPath, 0, 0, spring_const]
-
-        break_force = min_strain * eff_spring_const
-
-        for key, val in layerDict.items():
-            layerDict[key][2] = layerDict[key][4] * min_strain
-            layerDict[key][3] = min_strain
-
-        if(output):
-            print("--- Tether Straight-Run Strength Analysis ---")
-            print("  Calculated Strength: {} N".format(break_force))
-            print("  Tether Elongation: {} m".format(min_strain * self.length))
-
-            if(verbose):
-                print("  Per-Layer Results:")
-                for k in layerDict.keys():
-                    properties = layerDict[k]
-                    if properties[2] == 0:
-                        continue
-                    print("  Name: {}, Path: {}".format(properties[0], properties[1]))
-                    print("    - Strength Contribution: {} N".format(properties[2]))
-                    print("    - Stretch: {} m".format(properties[3]))
-                    print("    - Spring Constant: {}".format(properties[4]))
-
-        return break_force
-
-
-    def unhelixStrength(self, output=True, verbose=False):
-        
-        """Calculates the strength of the tether, allowing helixed members to
-        straighten. (Not all members see load immeidately)
-
-        Args:
-            output (bool, optional): Whether to print analysis results. Defaults to True.
-            verbose (bool, optional): Whether to include per-layer results. Defaults to False.
-
-        Returns:
-            _type_: _description_
-        """
-
-        tetherLayers = []
-        self.layer.countLayers(list=tetherLayers)
-
-        # Sort layers by ascending order of length #    
-        tetherLayers.sort(key=lambda x: x.length)
-
-        # the length the entire tether needs to stretch to in order to hit the yield strain of this member #
-        yield_length_tether = [] 
-        layerDict = {}
-
-        for layer in tetherLayers:
-
-            layerDict[layer.layerPath] = [layer.name, layer.layerPath]
-
-            # Grab yield stress and young's modulus #
-            material_entry = databases.get_material_entry(layer.layerMaterial)
-            yield_stress = DB.get_material_property(material_entry, "stress")
-            young_mod = DB.get_material_property(material_entry, "elastic_modulus")
-
-            if young_mod == 0:
-                continue
-            
-            # Calculate effective tether length, and update min strain #
-            strain = yield_stress / young_mod
-            yield_length = layer.length * (1 + strain)
-            yield_length_tether.append(yield_length)
-
-        # Find the breaking length of the tether (first layer to hit yield strain w.r.t. tether length) # 
-        tether_break_len = min(yield_length_tether)
-
-        break_force = 0
-
-        forceCarryingLayers = []
-
-
-        # Build a list of layers that will see stretch & contribute to strength #
-        for layer in tetherLayers:
-            if layer.length < tether_break_len:
-
-                # Calculate force contribution #
-                material_entry = databases.get_material_entry(layer.layerMaterial)
-                yield_stress = DB.get_material_property(material_entry, "stress")
-                young_mod = DB.get_material_property(material_entry, "elastic_modulus")
-
-                if young_mod == 0:
-                    layerDict[layer.layerPath].extend([0, 0, 0])
-                    continue
-
-                forceCarryingLayers.append(layer)
-
-                strain = yield_stress / young_mod
-                mm_to_m = DB.build_multiplier("mm^2", "m^2")
-                csa = (layer.outerRadius**2 - layer.innerRadius**2) * np.pi * mm_to_m * layer.fillRatio
-                gpa_to_pa = 1 / DB.build_multiplier("Pa", "GPa")
-                spring_const = (young_mod * csa * gpa_to_pa) / layer.length 
-
-                layerDict[layer.layerPath].extend([spring_const * (tether_break_len - layer.length), (tether_break_len - layer.length), spring_const])
-
-                break_force += spring_const * (tether_break_len - layer.length)
-
-            else:
-                layerDict[layer.layerPath].extend([0, 0, 0])
-
-        if(output):
-            print("--- Tether Unhelix-Allowed Strength Analysis ---")
-            print("  Calculated Strength: {} N".format(break_force))
-            print("  Tether Elongation: {} m".format(tether_break_len - self.length))
-            
-            if verbose:
-                print("  Per-Layer Results:")
-                for k in layerDict.keys():
-                    properties = layerDict[k]
-                    if properties[2] == 0:
-                        continue
-                    print("  Name: {}, Path: {}".format(properties[0], properties[1]))
-                    print("    - Strength Contribution: {} N".format(properties[2]))
-                    print("    - Stretch: {} m".format(properties[3]))
-                    print("    - Spring Constant: {}".format(properties[4]))
-
-        return break_force
+    
 
 
     def findWires(self, wireType):
@@ -1339,6 +1273,11 @@ class RoundTetherDesign():
 
         return object
     
+    def getLayerByName(self, name):
+        layerlist = self.layer.enumerateLayers()
+        return [l for l in layerlist if l.name == name]
+        
+    
     def printLayerPaths(self):
         """Print all of the layer paths within the tree
         """
@@ -1410,17 +1349,52 @@ class RoundTetherDesign():
         # Assign coordinates for the new member and update encapsulated layers # 
         newMem.x = x
         newMem.y = y
-        newMem.polarCords = cart_to_polar([newMem.x, newMem.y])
+        newMem.polarCoords = cart_to_polar([newMem.x, newMem.y])
         newMem.update_member_positions()
+        
+        layer.memberPosition.append([x, y])
         
         # Add it to the list and then make sure all paths are up-to-date # 
         layer.memberList.append(newMem)
         self.assignLayerPaths()
-        self._calculateMechanicalProperties()
+        self._calculateMassProperties()
 
 
 
 # Some helper functions #
+
+def get_conductor(gauge, db="Basic", stranding=1):
+    data = databases.conductor_db_dict[db]
+    query = {"AWG Size": gauge, "Stranding":str(stranding)}
+    entry = DB.searchEntry(data, query)
+    
+    if len(entry) == 0:
+      print("Error, unable to find conductor matching gauge: %d, stranding: %s" % (gauge, str(stranding)))
+      print("Available wires matching gauge:")
+      entry = DB.searchEntry(data, {"AWG Size": gauge})
+      print(entry)
+      
+      #Select first entry
+      entry = entry.loc[entry.index[0]:entry.index[0]]
+      
+    
+    if len(entry) == 0:
+      print("Error, unable to find conductor matching gauge: %d" % gauge)
+      return None
+    
+    wire_od = float(entry['OD'].item())
+    wire_area = float(entry['Area'].item())
+    import math
+    fill = wire_area / (0.25 * math.pi * wire_od**2)
+    fill = min(fill, 1) # Limit fill ratio to 1 for cases where the database area numbers are slightly off
+    return Layer("copper", "Conductor", wire_od/2, fillRatio=fill, color="Orange")
+
+def list_conductors(gauge, db="Basic"):
+    data = databases.conductor_db_dict[db]
+    query = {"AWG Size": gauge}
+    entries = DB.searchEntry(data, query)
+    print(entries)
+
 def midpoint(p1, p2):
     """Finds the midpoint (cartesian) between points 1 and 2
 
