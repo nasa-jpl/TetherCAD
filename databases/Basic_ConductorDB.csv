@@ -1,5 +1,5 @@
 ﻿AWG Size,Stranding,Type,Construction,material,OD,Area,Weight,Breaking Strength,Resistance,,
-,mm,mm^2,kg/km,kgf,Ohms/km,,,,,,
+,,,,,mm,mm^2,kg/km,kgf,Ohms/km,,,,,,
 56,1,S,Solid,copper,0.0124,0.00012,0.001,0,154039,,
 54,1,S,Solid,copper,0.0157,0.0002,0.002,0,94520,,
 52,1,S,Solid,copper,0.0198,0.00031,0.003,0.01,60493,,
