@@ -15,6 +15,8 @@ import re
 import pandas as pd
 import warnings
 import numpy as np
+import csv
+
 
 
 class DatabaseControl:
@@ -76,7 +78,6 @@ class DatabaseControl:
         
         if path == None:
             self.dbPath = pathlib.Path(__file__).resolve().parent
-            print(self.dbPath)
         else:
             self.dbPath = pathlib.Path(path)
 
@@ -92,7 +93,7 @@ class DatabaseControl:
                 filename = re.findall(r'^(.+?)_', files)[0]
                 location = self.dbPath / files
                 print("Reading database %s" % filename)
-                curr_database = pd.read_csv(location).replace(np.nan, None, regex=True)
+                curr_database = self.load_db_csv(location)
             else:
                 continue
 
@@ -138,6 +139,60 @@ class DatabaseControl:
 
             else:
                 continue
+    
+    """ Reads database csv file and creates a pandas dataframe with appropriate metadata stored in attrs.
+
+    """
+    
+    def load_db_csv(self, path):
+        # Read csv manually to handle special formatting that Pandas doesn't handle well
+        print("Loading %s" % str(path))
+        with open(path, 'r', newline='', encoding='utf-8-sig') as file:
+            reader = csv.reader(file)
+
+            # Read column names
+            col_names = next(reader)
+            data = {col : [] for col in col_names}
+            # Clear out any unnamed columns
+            if '' in data:
+                del data[""]
+            
+            # Read unit heading
+            units = next(reader)
+
+            # Read data
+            for row in reader:
+                for i, r in enumerate(row):
+                    col = col_names[i]
+                    
+                    if len(col) == 0:
+                        continue
+
+                    data[col].append(r)
+            col_names = list(data.keys())
+            
+            # Create Pandas dataframe from data
+            df = pd.DataFrame(data)
+            df.attrs['units'] = {col_names[i] : units[i] for i in range(0, len(col_names))}
+            
+            
+            # Try to convert any numerical columns to numeric types in pandas
+            for i, col in enumerate(col_names):
+                col_units = col + '_unit'
+                # If it has a unit, it's numeric
+                if len(units[i]) > 0 or col_units in df:
+                    df[col] = pd.to_numeric(df[col])
+                # otherwise try to convert, but don't worry about exceptions
+                else:
+                    try:
+                        df[col] = pd.to_numeric(df[col])    
+                    except Exception:
+                        pass
+                        # print("Could not convert %s to numeric type" % col)
+            
+        return df
+        
+
 
     def load_from_folder(self, path):
         self.__init__(path=path)
@@ -156,7 +211,6 @@ class DatabaseControl:
         cols = db.columns
 
         for col in cols:
-
             # Ignore the unitand name columns #
             if "_unit" in col or "_name" in col:
                 continue
@@ -175,7 +229,7 @@ class DatabaseControl:
                         unit = db[unit_col][idx]
 
                         # Skip values where the unit is empty #
-                        if unit is None:
+                        if len(unit) == 0:
                             continue
 
                         if(is_float(val)):
@@ -188,7 +242,7 @@ class DatabaseControl:
                         unit = db[unit_col][idx]
 
                         # Skip values where unit is empty, values should be empty as well #
-                        if unit is None:
+                        if len(unit) == 0:
                             continue
 
                         multiplier = build_multiplier(unit, defaultUnit)
@@ -198,8 +252,6 @@ class DatabaseControl:
                             db.loc[idx, unit_col] = defaultUnit
 
         return db.iloc[:, :-2]
-            
-
 
         
     def process_wire_database(self, db, wire_type="wire"):
@@ -231,13 +283,14 @@ class DatabaseControl:
 
         # Loop through columns
         for col in cols:
-
             if col not in defaultUnitList.keys():
                 continue
             defaultUnit = defaultUnitList[col]
 
             # Grab the appropriate unit from the column, throwing an error if we expect one but none is present #
-            unit = db[col][0]
+            # unit = db[col][0]
+            unit = db.attrs['units'][col]
+            
             if unit is None:
                 raise ValueError("Got None for unit when a default is present!")
 
@@ -245,7 +298,6 @@ class DatabaseControl:
 
             # Modify units using the multiplier #
             for idx, val in enumerate(db[col]):
-
                 if(is_float(val)):
                     db.loc[idx, col] = float(val) * multiplier
                 
