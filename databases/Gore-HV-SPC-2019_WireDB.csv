@@ -1,4 +1,4 @@
-﻿Part #,awg,strands/diam,conductor_material,insulation_material,insulation_thickness,insulation_od,conductor_od,weight/distance,Voltage(RMS),Resistance,Shielded?,Cores
+Part #,awg,strands/diam,conductor_material,insulation_material,insulation_thickness,insulation_od,conductor_od,weight/distance,Voltage(RMS),Resistance,Shielded?,Cores
 ,,,,,mm,mm,mm,kg/km,V,ohm/km,,
 ESCC390100901B,28,7/0.127,copper,polyimide,,0.86,0.4,1.49,600,253,No,1
 ESCC390100902B,26,19/0.102,copper,polyimide,,0.99,0.54,2.29,600,147,No,1
@@ -17,21 +17,21 @@ ESCC390100914B,12,37/0.32,copper,polyimide,,5.48,2.29,68.5,600,6.4,No,2
 ESCC390100915B,26,19/0.102,copper,polyimide,,2.07,0.54,6.95,600,150,No,3
 ESCC390100916B,24,19/0.127,copper,polyimide,,2.35,0.67,9.97,600,96,No,3
 ESCC390100917B,22,19/0.160,copper,polyimide,,2.73,0.84,14.98,600,50.5,No,3
-ESCC390100918B,20,19/0.203,copper,polyimide,,3.18,1.05,23.20,600,30.5,No,3
-ESCC390100919B,16,19/0.287,copper,polyimide,,4.17,1.48,44.20,600,15.3,No,3
+ESCC390100918B,20,19/0.203,copper,polyimide,,3.18,1.05,23.2,600,30.5,No,3
+ESCC390100919B,16,19/0.287,copper,polyimide,,4.17,1.48,44.2,600,15.3,No,3
 ESCC390100920B,12,37/0.32,copper,polyimide,,5.92,2.29,101.5,600,6.4,No,3
 ESCC390100921B,26,19/0.102,copper,polyimide,,2.32,0.54,9.35,600,151,No,4
-ESCC390100922B,24,19/0.127,copper,polyimide,,2.62,0.67,13.30,600,97,No,4
+ESCC390100922B,24,19/0.127,copper,polyimide,,2.62,0.67,13.3,600,97,No,4
 ESCC390100923B,22,19/0.160,copper,polyimide,,3.04,0.84,19.97,600,51,No,4
 ESCC390100924B,20,19/0.203,copper,polyimide,,3.54,1.05,30.25,600,31.1,No,4
 ESCC390100925B,16,19/0.287,copper,polyimide,,4.56,1.48,57,600,15.4,No,4
-ESCC390100926B,12,37/0.32,copper,polyimide,,6.58,2.29,135.50,600,6.5,No,4
+ESCC390100926B,12,37/0.32,copper,polyimide,,6.58,2.29,135.5,600,6.5,No,4
 ESCC390100927B,26,19/0.102,copper,polyimide,,2.62,0.54,12.63,600,152,No,5
 ESCC390100928B,24,19/0.127,copper,polyimide,,2.93,0.67,18.25,600,97.5,No,5
 ESCC390100929B,22,19/0.160,copper,polyimide,,3.41,0.84,27.25,600,51.3,No,5
-ESCC390100930B,20,19/0.203,copper,polyimide,,3.96,1.05,41.60,600,31.3,No,5
-ESCC390100931B,26,19/0.102,copper,polyimide,,2.94,0.54,16.20,600,153,No,7
-ESCC390100932B,24,19/0.127,copper,polyimide,,3.30,0.67,23.25,600,98,No,7
+ESCC390100930B,20,19/0.203,copper,polyimide,,3.96,1.05,41.6,600,31.3,No,5
+ESCC390100931B,26,19/0.102,copper,polyimide,,2.94,0.54,16.2,600,153,No,7
+ESCC390100932B,24,19/0.127,copper,polyimide,,3.3,0.67,23.25,600,98,No,7
 ESCC390100933B,22,19/0.160,copper,polyimide,,3.81,0.85,36,600,51.5,No,7
 ESCC390100934B,20,19/0.203,copper,polyimide,,4.47,1.05,53,600,31.4,No,7
 ESCC390100935B,28,7/0.127,copper,polyimide,,1.62,0.4,6.81,600,253,Yes,1
@@ -40,7 +40,7 @@ ESCC390100937B,24,19/0.127,copper,polyimide,,1.87,0.67,9.21,600,94,Yes,1
 ESCC390100938B,28,7/0.127,copper,polyimide,,2.4,0.4,11.18,600,258,Yes,2
 ESCC390100939B,26,19/0.102,copper,polyimide,,2.64,0.54,13.3,600,150,Yes,2
 ESCC390100940B,24,19/0.127,copper,polyimide,,2.94,0.67,16.11,600,96,Yes,2
-ESCC390100941B,22,19/0.160,copper,polyimide,,3.42,0.84,24.50,600,50.5,Yes,2
+ESCC390100941B,22,19/0.160,copper,polyimide,,3.42,0.84,24.5,600,50.5,Yes,2
 ESCC390100942B,20,19/0.203,copper,polyimide,,3.87,1.05,33.7,600,30.5,Yes,2
 ESCC390100943B,16,19/0.287,copper,polyimide,,4.75,1.48,49.75,600,15.3,Yes,2
 ESCC390100944B,12,37/0.32,copper,polyimide,,6.45,2.29,96.26,600,6.4,Yes,2
@@ -57,7 +57,7 @@ ESCC390100954B,20,19/0.203,copper,polyimide,,4.45,1.05,53.5,600,31.1,Yes,4
 ESCC390100955B,16,19/0.287,copper,polyimide,,5.4,1.48,83,600,15.4,Yes,4
 ESCC390100956B,12,37/0.32,copper,polyimide,,7.52,2.29,169.13,600,6.5,Yes,4
 ESCC390100957B,26,19/0.102,copper,polyimide,,3.26,0.54,22.8,600,152,Yes,5
-ESCC390100958B,24,19/0.127,copper,polyimide,,3.69,0.67,30.20,600,97.5,Yes,5
+ESCC390100958B,24,19/0.127,copper,polyimide,,3.69,0.67,30.2,600,97.5,Yes,5
 ESCC390100959B,22,19/0.160,copper,polyimide,,4.21,0.84,47.3,600,51.3,Yes,5
 ESCC390100960B,20,19/0.203,copper,polyimide,,4.73,1.05,66.8,600,31.3,Yes,5
 ESCC390100961B,26,19/0.102,copper,polyimide,,3.6,0.54,27.85,600,153,Yes,7
