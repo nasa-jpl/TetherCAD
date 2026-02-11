@@ -1,4 +1,4 @@
-﻿Part #,type,core_od,cladding_od,jacket_od,jacket_material,weight/length,tensile_strength
+Part #,type,core_od,cladding_od,jacket_od,jacket_material,weight/length,tensile_strength
 ,,micron,micron,mm,,g/m,lb
 LINDEN-SPE-7079,singlemode,,,1.65,lcp,,50
 LINDEN-SPE-7208,singlemode,,,2,lcp,,50
@@ -14,4 +14,3 @@ LINDEN-SPE-7081,multimode,62.5,125,1.65,lcp,,50
 LINDEN-SPE-7213,multimode,62.5,125,2,lcp,,50
 LINDEN-SPE-7214,multimode,62.5,125,2.2,lcp,,50
 LINDEN-SPE-7346,multimode,50,125,2.9,lcp,,60
-,,,,,,,

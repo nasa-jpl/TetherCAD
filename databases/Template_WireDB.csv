@@ -1,4 +1,4 @@
-﻿Part #,awg,strands/awg,conductor_material,insulation_material,insulation_thickness,insulation_od,conductor_od,weight/length,Voltage(DC)
+Part #,awg,strands/awg,conductor_material,insulation_material,insulation_thickness,insulation_od,conductor_od,weight/length,Voltage(DC)
 ,,,,,mm,mm,mm,g/m,kV
 178-9907,29,51/46,copper,FEP,,0.64,0.35,,5
 178-9912,28,19/40,copper,FEP,,1,0.4,,5
