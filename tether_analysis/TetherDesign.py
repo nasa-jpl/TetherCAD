@@ -25,7 +25,7 @@ databases = DB.DatabaseControl()
 class Layer():
 
     def __init__(self, material, name, thickness, innerLayer=None, memberList=None, copy=True, color=None, 
-                 helixAngle=90, fillRatio=1.0, iter_limit=100000, step=0.001) -> None:
+                 helixAngle=90, fillRatio=1.0, iter_limit=100000, step=0.001, innerDiameter=None) -> None:
         """Constructor for Layer class.
 
         Args:
@@ -134,6 +134,14 @@ class Layer():
         # Define our geometry on initialization #
         self.define_layer_geometry(step=step)
 
+        # If user has specified the geometry manually, overwrite the autosizing algorithm
+        if innerDiameter is not None:
+          self.innerRadius = innerDiameter/2
+          self.memberStartRadius = self.innerRadius
+          self.outerRadius = self.innerRadius + self.layerThickness
+          self.innerDiameter = 2 * self.innerRadius
+          self.outerDiameter = 2 * self.outerRadius
+
         self.check_layer_collisions()
 
     def __str__(self, indent_level=0):
@@ -208,6 +216,9 @@ class Layer():
         maxDist = self._solve_collisions()
 
         self._resize_layer(maxDist)
+        
+        
+        
 
         for member in self.memberList:
             memPos = [member.x, member.y]
@@ -473,15 +484,19 @@ class Layer():
             tabNum (int, optional): Number of tabs to indent the details of this layer. Defaults to 0.
         """
         startStr = ''.join("   " for x in range(0, tabNum))
-        print(startStr + "Name: %s, Path (if set): %s" % (self.name, self.layerPath))
-        print(startStr + "Layer Dimensions:")
-        print(startStr + " - Inner Radius: %f mm" % self.innerRadius)
-        print(startStr + " - Outer Radius: %f mm" % self.outerRadius)
-        print(startStr + " - Layer Thickness: %f mm" % self.layerThickness)
+        print(startStr + "-Layer: \"%s\", Path : %s" % (self.name, self.layerPath))
+        print(startStr + "  Inner Radius: %f mm" % self.innerRadius)
+        print(startStr + "  Outer Radius: %f mm" % self.outerRadius)
+        print(startStr + "  Layer Thickness: %f mm" % self.layerThickness)
+        print(startStr + "  Layer Unit Mass: %f g/m" % (self.material_mass / self.length))
+        # if(len(self.memberList) > 0):
+        #     print(startStr + " - Equal Spacing: " + str(self.equalSpacing))
+        #     print(startStr + " - Member Number: %d" % len(self.memberList))
+        #     print(startStr + " - Member Start Radius: %f" %self.memberStartRadius)
         if(len(self.memberList) > 0):
-            print(startStr + " - Equal Spacing: " + str(self.equalSpacing))
-            print(startStr + " - Member Number: %d" % len(self.memberList))
-            print(startStr + " - Member Start Radius: %f" %self.memberStartRadius)
+          for member in self.memberList:
+            member.layerDetails(recursive=True, tabNum=tabNum+1)
+            
 
         if recursive and self.innerLayer is not None:
             self.innerLayer.layerDetails(recursive=True, tabNum=tabNum+2)
@@ -535,6 +550,9 @@ class Layer():
         if (borderless):
             width = 0
 
+        if self.layerMaterial.lower() == 'air':
+          width = 0
+
         hatch=None
         if self.fillRatio < 1.0:
           if len(self.memberList) < 1:
@@ -550,6 +568,14 @@ class Layer():
             (self.x, self.y), radius=self.outerRadius, facecolor=self.color, edgecolor="black", linewidth=width, hatch=hatch)
         circle._hatch_color = (.5, .5, .5)
         ax.add_patch(circle)
+        
+        if self.innerRadius > 0:
+          material_entry, _ = DB.DatabaseControl().find_material('air')
+          air_color = material_entry["color"].item()
+          circle = matplotlib.patches.Circle(
+              (self.x, self.y), radius=self.innerRadius, facecolor=air_color, edgecolor="black", linewidth=0)
+          ax.add_patch(circle)
+        
 
         # Draw any helixed members #
         for member in self.memberList:
@@ -637,14 +663,14 @@ class Layer():
 
         totalVolume = (self.outerRadius**2 - self.innerRadius**2) * np.pi * length_mm * self.fillRatio
 
-        layerMass = 0
+        layerMass = totalVolume * density
+
+        self.material_mass = layerMass
 
         for member in self.memberList:
             layerMass += member._calcLayerMass(breakDownList=breakDownList)
             memVolume = member.length * np.pi * member.outerRadius ** 2 * m_to_mm_mult
             totalVolume -= memVolume
-
-        layerMass += totalVolume * density
 
         # If a list was passed, add this layer's mass to it #
         if breakDownList is not None:
@@ -654,6 +680,7 @@ class Layer():
         if self.innerLayer is not None:
             layerMass += self.innerLayer._calcLayerMass(breakDownList=breakDownList)
 
+        self.total_mass = layerMass
         return layerMass
     
 
