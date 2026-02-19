@@ -16,16 +16,19 @@ from matplotlib import pyplot as plt
 from copy import deepcopy
 import warnings
 import re
+import math
 
 import databases.DatabaseControl as DB
 
 databases = DB.DatabaseControl()
         
 
+layout_styles = ['Concentric', 'CirclePack']
+
 class Layer():
 
     def __init__(self, material, name, thickness, innerLayer=None, memberList=None, copy=True, color=None, 
-                 helixAngle=90, fillRatio=1.0, iter_limit=100000, step=0.001, innerDiameter=None) -> None:
+                 helixAngle=90, fillRatio=1.0, iter_limit=100000, step=0.001, innerDiameter=None, layout_style="Concentric") -> None:
         """Constructor for Layer class.
 
         Args:
@@ -68,9 +71,16 @@ class Layer():
         self.memberHelixLead = 0            # mm / turn
         self.length = 0                     # (m) Used by RoundTetherDesign
         self.layerID = 0                    
-        self.x = 0
-        self.y = 0
+        self.x_rel = 0 # x-location relative to center of parent layer
+        self.y_rel = 0 # y-location relative to center of parent layer
+        self.x = 0 # x absolute position
+        self.y = 0 # y absolute position
         self.polarCoords = [0, 0]
+        self.layout_style=layout_style
+        
+        if layout_style not in layout_styles:
+          raise ValueError("\'%s\' is not a valid layout style" % layout_style)
+        
 
 
         if fillRatio <= 0 or fillRatio > 1:
@@ -94,7 +104,6 @@ class Layer():
 
         # Initialize member list to be empty and inner layer to be none #
         self.memberList = []
-        self.memberPosition = []
 
         # Set the inner layer #
         if copy:
@@ -132,7 +141,12 @@ class Layer():
         self.iter_limit = iter_limit
 
         # Define our geometry on initialization #
-        self.define_layer_geometry(step=step)
+        if self.layout_style == 'Concentric':
+          self._layout_concentric(step=step)
+        else:
+          if self.innerLayer is not None:
+            raise ValueError("Error: Inner layer specified with Circle Pack layout style")
+          self._layout_circle_pack()
 
         # If user has specified the geometry manually, overwrite the autosizing algorithm
         if innerDiameter is not None:
@@ -186,8 +200,52 @@ class Layer():
       
       
       
+      
+    def _layout_circle_pack(self):
+        """Lays out internal geometry assuming all members in the memberlist have equal diameter. Uses mathematically proven optimal circle arrangements"
+        """
+        
+        member_max_diameter = max([m.outerDiameter for m in self.memberList])
+        
+        n = len(self.memberList)
+        
+        diameter_ratio_lookup = [0, 1, 2, 2.155, 2.414, 2.701, 3, 3, 3.304, 3.613, 3.813, 3.923, 4.029, 4.236, 4.328, 4.521, 4.615, 4.792, 4.863, 4.863, 5.122]
+        
+        self.innerDiameter = self.innerRadius = 0
+        self.outerDiameter = diameter_ratio_lookup[n] * member_max_diameter + 1e-6
+        self.outerRadius = self.outerDiameter/2
+        
+        if n < 6:
+          circle_pack(self.memberList)
+        elif n == 6:
+          circle_pack(self.memberList, min_diameter=member_max_diameter*2)
+          # circle_pack(self.memberList[1:6], min_diameter=member_max_diameter*2) # Alternate
+        elif n == 7:
+          circle_pack(self.memberList[1:7], min_diameter=member_max_diameter*2)
+        elif n == 8:
+          circle_pack(self.memberList[1:8])
+        elif n == 9:
+          circle_pack(self.memberList[1:9])
+        elif n == 10:
+          circle_pack(self.memberList[0:2], pos=(0,.05*member_max_diameter))
+          circle_pack(self.memberList[2:10], min_diameter=(diameter_ratio_lookup[n]-1)*member_max_diameter, scrunch=True)
+        elif n == 11:
+          circle_pack(self.memberList[0:2], pos=(0,-.078*member_max_diameter), offset_angle = math.pi/2)
+          circle_pack(self.memberList[2:11])
+        elif n == 12:
+          circle_pack(self.memberList[0:3])
+          circle_pack(self.memberList[3:6], min_diameter=(diameter_ratio_lookup[n]-1)*member_max_diameter, scrunch=True, offset_angle = 0)
+          circle_pack(self.memberList[6:9], min_diameter=(diameter_ratio_lookup[n]-1)*member_max_diameter, scrunch=True, offset_angle = 2*math.pi/3)
+          circle_pack(self.memberList[9:12], min_diameter=(diameter_ratio_lookup[n]-1)*member_max_diameter, scrunch=True, offset_angle = 4*math.pi/3)
+        elif n == 13:
+          circle_pack(self.memberList[0:3])
+          circle_pack(self.memberList[3:13])
+        else:
+          raise ValueError("Circle pack arrangements have only been implemented up to 13 members")
+        
+      
 
-    def define_layer_geometry(self, step=0.001):
+    def _layout_concentric(self, step=0.001):
         """Defines the geometry of the layer, sizing things to be appropriate if necessary. 
 
         Args:
@@ -218,12 +276,6 @@ class Layer():
         self._resize_layer(maxDist)
         
         
-        
-
-        for member in self.memberList:
-            memPos = [member.x, member.y]
-            self.memberPosition.append(memPos)
-
         # Update position of sub members based on this member's coords (important for helixed Layers)
         self.update_member_positions()
 
@@ -322,8 +374,8 @@ class Layer():
                 # Grab the positions of each member to each other, checking if they are at least tangent #
                 mem1 = self.memberList[i]
                 mem2 = self.memberList[j]
-                p1 = [mem1.x, mem1.y]
-                p2 = [mem2.x, mem2.y]
+                p1 = [mem1.x_rel, mem1.y_rel]
+                p2 = [mem2.x_rel, mem2.y_rel]
                 if check_tangent(p1, p2, mem1.outerRadius, mem2.outerRadius):
                     continue
 
@@ -341,8 +393,8 @@ class Layer():
         for member in self.memberList:
             member.polarCoords[0] *= maxScale
             coords = polar_to_cart(member.polarCoords)
-            member.x = coords[0]
-            member.y = coords[1]
+            member.x_rel = coords[0]
+            member.y_rel = coords[1]
 
             dist = member.polarCoords[0] + member.outerRadius
             if dist > maxDist:
@@ -373,21 +425,21 @@ class Layer():
         the encapsulating tether design
         """
 
-        # Update the positions of helixed members, and then any layers they encapsulate #
-        for idx, member in enumerate(self.memberList):
+        # # Update the positions of helixed members, and then any layers they encapsulate #
+        # for idx, member in enumerate(self.memberList):
 
-            memPos = self.memberPosition[idx]
-            member.x = self.x + memPos[0]
-            member.y = self.y + memPos[1]
-            member.polarCoords = cart_to_polar([member.x, member.y])
-            member.update_member_positions()
+        #     memPos = self.memberPosition[idx]
+        #     member.x = self.x_rel + memPos[0]
+        #     member.y = self.y_rel + memPos[1]
+        #     member.polarCoords = cart_to_polar([member.x, member.y])
+        #     member.update_member_positions()
 
-        # Update the position of any layer this one encapsulates, and any layers it encapsulates #
-        if self.innerLayer is not None:
-            self.innerLayer.x = self.x
-            self.innerLayer.y = self.y
-            self.innerLayer.polarCoords = cart_to_polar([self.innerLayer.x, self.innerLayer.y]) 
-            self.innerLayer.update_member_positions()
+        # # Update the position of any layer this one encapsulates, and any layers it encapsulates #
+        # if self.innerLayer is not None:
+        #     self.innerLayer.x = self.x_rel
+        #     self.innerLayer.y = self.y_rel
+        #     self.innerLayer.polarCoords = cart_to_polar([self.innerLayer.x, self.innerLayer.y]) 
+        #     self.innerLayer.update_member_positions()
 
  
     def check_member_collisions(self, verbose=False):
@@ -406,12 +458,12 @@ class Layer():
                 if mem1 is mem2:
                     continue
                 else:
-                    if not check_tangent([mem1.x, mem1.y], [mem2.x, mem2.y], mem1.outerRadius, mem2.outerRadius):
+                    if not check_tangent([mem1.x_rel, mem1.y_rel], [mem2.x_rel, mem2.y_rel], mem1.outerRadius, mem2.outerRadius):
                         collisionCount += 1
 
                         if verbose:
                             print("Member at: (%f, %f) with radius: %f collides with member at (%f, %f) with radius: %f" 
-                                  % (mem1.x, mem1.y, mem1.outerRadius, mem2.x, mem2.y, mem2.outerRadius))
+                                  % (mem1.x_rel, mem1.y_rel, mem1.outerRadius, mem2.x_rel, mem2.y_rel, mem2.outerRadius))
             
         if collisionCount >= 1:
             if verbose:
@@ -517,6 +569,18 @@ class Layer():
       
       return layerList
       
+    def update_abs_pos(self, pos=(0,0)):
+      abs_pos = (self.x_rel + pos[0], self.y_rel + pos[1])
+      
+      self.x = abs_pos[0]
+      self.y = abs_pos[1]
+      
+      if self.innerLayer is not None:
+        self.innerLayer.update_abs_pos(abs_pos)
+      
+      for member in self.memberList:
+          member.update_abs_pos(abs_pos)
+
       
     def illustrate(self, ax=None, borderless=False, figdim=5):
         """Illustrates this layer using matplotlib
@@ -846,12 +910,10 @@ class Layer():
         newMem = deepcopy(member)
 
         # Assign coordinates for the new member and update encapsulated layers # 
-        newMem.x = x
-        newMem.y = y
-        newMem.polarCoords = cart_to_polar([newMem.x, newMem.y])
+        newMem.x_rel = x
+        newMem.y_rel = y
+        newMem.polarCoords = cart_to_polar([newMem.x_rel, newMem.y_rel])
         newMem.update_member_positions()
-        
-        self.memberPosition.append([x, y])
         
         # Add it to the list and then make sure all paths are up-to-date # 
         self.memberList.append(newMem)
@@ -1115,6 +1177,9 @@ class RoundTetherDesign():
         # Set names for the wires #
         self.assignLayerPaths()
 
+
+        self.layer.update_abs_pos((0,0))
+
         # Geometry and physical properties #
         self.diameter = self.layer.outerDiameter       # (mm)
         self.radius = self.layer.outerRadius           # (mm)
@@ -1168,14 +1233,14 @@ class RoundTetherDesign():
         if recursive:
             self.layer.layerDetails(recursive=True, tabNum=1)
 
-    def illustrate(self, ax=None, borderless=False, figdim=5):
+    def illustrate(self, pos=(0,0), ax=None, borderless=False, figdim=5):
         """Illustrates a given tether design.
 
         Args:
             borderless (bool, optional): Whether to omit layer borders. Defaults to False.
             figdim (int, optional): Dimension of each side of the figure (inches). Defaults to 5.
         """
-
+        self.layer.update_abs_pos(pos)
         self.layer.illustrate(ax=ax, borderless=borderless, figdim=figdim)
         
         if ax is not None:
@@ -1379,8 +1444,6 @@ class RoundTetherDesign():
         newMem.polarCoords = cart_to_polar([newMem.x, newMem.y])
         newMem.update_member_positions()
         
-        layer.memberPosition.append([x, y])
-        
         # Add it to the list and then make sure all paths are up-to-date # 
         layer.memberList.append(newMem)
         self.assignLayerPaths()
@@ -1389,6 +1452,30 @@ class RoundTetherDesign():
 
 
 # Some helper functions #
+
+def circle_pack(members, min_diameter = 0, pos=(0,0), scrunch=False, offset_angle=0):
+    mem_diameter = max([m.outerDiameter for m in members])
+    n = len(members)
+    r = (mem_diameter/2) / math.sin(math.pi / n)
+    r = max(r, min_diameter/2)
+
+    if n == 1:
+      r = 0
+
+    if scrunch:
+      scrunch_angle = 2*math.asin(mem_diameter/min_diameter)
+      gap_angle = 2*math.pi - (n-1)*scrunch_angle
+      for i, m in enumerate(members):
+        angle = i*scrunch_angle + offset_angle + gap_angle/2
+        m.x_rel = pos[0] + r * math.sin(angle)
+        m.y_rel = pos[1] + r * math.cos(angle)
+      
+    else:
+      for i, m in enumerate(members):
+        angle = i*2*math.pi/n + offset_angle
+        m.x_rel = pos[0] + r * math.sin(angle)
+        m.y_rel = pos[1] + r * math.cos(angle)
+      
 
 def get_conductor(gauge, db="Basic", stranding=1):
     data = databases.conductor_db_dict[db]
@@ -1411,7 +1498,7 @@ def get_conductor(gauge, db="Basic", stranding=1):
     
     wire_od = float(entry['OD'].item())
     wire_area = float(entry['Area'].item())
-    import math
+    
     fill = wire_area / (0.25 * math.pi * wire_od**2)
     fill = min(fill, 1) # Limit fill ratio to 1 for cases where the database area numbers are slightly off
     return Layer("copper", "Conductor", wire_od/2, fillRatio=fill, color="Orange")
