@@ -95,14 +95,23 @@ def analysis_1(tether, annotate=True, annotation_spacing=None, temp=200, tether_
       specs.append("Unit Loss: %.4f W/m" % (sols[0]['total_loss']/tether.length))
       specs.append("Efficiency: %.0f %%" % sols[0]['efficiency'])
       
-      send = tether.getLayerAtPath(send_wires[0])
-      ret = tether.getLayerAtPath(return_wires[0])
-      strength, materials = DA.getDielectricStrength(send.innerLayer, ret.innerLayer, tether.layer)
-    
-      specs.append('Breakdown Voltage: %.02f kV' % (strength/1000))
+      max_strength = 1e9
+      for s in send_wires:
+        for r in return_wires:
+          send = tether.getLayerAtPath(s)
+          ret = tether.getLayerAtPath(r)
+          strength, materials = DA.getDielectricStrength(send.innerLayer, ret.innerLayer, tether.layer)
+          if strength < max_strength:
+            max_strength = strength
+          print('Dielectric Breakdown Voltage from %s to %s: %f kV' % (s, r, strength/1000))
+          
+      specs.append('Breakdown Voltage: %.02f kV' % (max_strength/1000))
+      
     else:
       print("Warning, no power solutions found!!")
-      
+  
+  
+  
   specs.append("Total Mass: %.2f kg" % (tether.mass/1000))
   specs.append("Unit Mass: %.01f g/m" % (tether.mass/tether.length))
   # specs.append("Breaking Strength: %.0f N" % strengthUpperBound)
@@ -132,12 +141,12 @@ def analysis_1(tether, annotate=True, annotation_spacing=None, temp=200, tether_
 
 
   if send_wires is not None:
-    send = tether.getLayerAtPath(send_wires[0])
-    ret = tether.getLayerAtPath(return_wires[0])
-    ipts = DA.getBoundaries(send.innerLayer, ret.innerLayer, tether.layer)
-    strength, materials = DA.getDielectricStrength(send.innerLayer, ret.innerLayer, tether.layer)
+    # send = tether.getLayerAtPath(send_wires[0])
+    # ret = tether.getLayerAtPath(return_wires[0])
+    # ipts = DA.getBoundaries(send.innerLayer, ret.innerLayer, tether.layer)
+    # strength, materials = DA.getDielectricStrength(send.innerLayer, ret.innerLayer, tether.layer)
   
-    print('Dielectric Breakdown Voltage: %f kV' % (strength/1000))
+    print('Dielectric Breakdown Voltage: %f kV' % (max_strength/1000))
   
     imp = CA.characteristic_impedance(tether, pathList[0], pathList[1], temp=200, frequency=20e6)
     print('Characteristic Impedance (Not validated): %s' % str(imp))

@@ -156,7 +156,7 @@ class Layer():
           self.innerDiameter = 2 * self.innerRadius
           self.outerDiameter = 2 * self.outerRadius
 
-        self.check_layer_collisions()
+        self.check_layer_collisions(verbose=True)
 
     def __str__(self, indent_level=0):
         string = indent_level*'  ' + self.name
@@ -209,7 +209,7 @@ class Layer():
         
         n = len(self.memberList)
         
-        diameter_ratio_lookup = [0, 1, 2, 2.155, 2.414, 2.701, 3, 3, 3.304, 3.613, 3.813, 3.923, 4.029, 4.236, 4.328, 4.521, 4.615, 4.792, 4.863, 4.863, 5.122]
+        diameter_ratio_lookup = [0, 1, 2, 2.155, 2.414, 2.701, 3, 3, 3.305, 3.613, 3.813, 3.923, 4.029, 4.236, 4.328, 4.521, 4.615, 4.792, 4.863, 4.863, 5.122]
         
         self.innerDiameter = self.innerRadius = 0
         self.outerDiameter = diameter_ratio_lookup[n] * member_max_diameter + 1e-6
@@ -268,8 +268,8 @@ class Layer():
 
                 member.polarCoords[1] += self.extraAngle * self.memberList.index(member)
                 coords = polar_to_cart(member.polarCoords)
-                member.x = coords[0]
-                member.y = coords[1]
+                member.x_rel = coords[0]
+                member.y_rel = coords[1]
 
         maxDist = self._solve_collisions()
 
@@ -420,27 +420,20 @@ class Layer():
             self.innerDiameter = 2 * self.innerRadius
 
 
-    def update_member_positions(self):
+    def update_member_positions(self, pos=(0,0)):
         """Updates any members within any internal Layers with this Layer's coordinates, called by 
         the encapsulating tether design
         """
-
-        # # Update the positions of helixed members, and then any layers they encapsulate #
-        # for idx, member in enumerate(self.memberList):
-
-        #     memPos = self.memberPosition[idx]
-        #     member.x = self.x_rel + memPos[0]
-        #     member.y = self.y_rel + memPos[1]
-        #     member.polarCoords = cart_to_polar([member.x, member.y])
-        #     member.update_member_positions()
-
-        # # Update the position of any layer this one encapsulates, and any layers it encapsulates #
-        # if self.innerLayer is not None:
-        #     self.innerLayer.x = self.x_rel
-        #     self.innerLayer.y = self.y_rel
-        #     self.innerLayer.polarCoords = cart_to_polar([self.innerLayer.x, self.innerLayer.y]) 
-        #     self.innerLayer.update_member_positions()
-
+        abs_pos = (self.x_rel + pos[0], self.y_rel + pos[1])
+        
+        self.x = abs_pos[0]
+        self.y = abs_pos[1]
+        
+        if self.innerLayer is not None:
+          self.innerLayer.update_member_positions(abs_pos)
+        
+        for member in self.memberList:
+            member.update_member_positions(abs_pos)
  
     def check_member_collisions(self, verbose=False):
         """Returns whether there are any collisions between members within the same layer
@@ -492,19 +485,19 @@ class Layer():
             inner = mem.innerLayer
 
             # Check once here 
-            if(checkOverlap(self, outer)):
+            if(checkOverlap(self, outer, verbose)):
                 collisionsPresent = True
                 if verbose: print("Collision between member at: %s and %s detected" % (self.name, outer.name))
 
             while(inner is not None):
 
-                if(checkOverlap(self, outer)):
-                    collisionsPresent = True
-                    if verbose: print("Collision between member at: %s and %s detected" % (self.name, outer.name))
-                if(checkOverlap(self, inner)):
-                    collisionsPresent = True
-                    if verbose: print("Collision between member at: %s and %s detected" % (self.name, inner.name))
-                if(checkOverlap(outer, inner)):
+                # if(checkOverlap(self, outer)):
+                #     collisionsPresent = True
+                #     if verbose: print("Collision between member at: %s and %s detected" % (self.name, outer.name))
+                # if(checkOverlap(self, inner)):
+                #     collisionsPresent = True
+                #     if verbose: print("Collision between member at: %s and %s detected" % (self.name, inner.name))
+                if(checkOverlap(outer, inner, verbose)):
                     collisionsPresent = True
                     if verbose: print("Collision between member at: %s and %s detected" % (outer.name, inner.name))
 
@@ -515,7 +508,8 @@ class Layer():
             if collisionsPresent:
                 if output_on_error:
                     self.illustrate()
-                raise ValueError("A collision between two layers was detected!") 
+                # raise ValueError("A collision between two layers was detected!") 
+                print("A collision between two layers was detected!")
                 
 
     def _assign_cart_from_polar(self, member):
@@ -525,8 +519,8 @@ class Layer():
             member (_type_): _description_
         """
         coords = polar_to_cart(member.polarCoords)
-        member.x = coords[0]
-        member.y = coords[1]
+        member.x_rel = coords[0]
+        member.y_rel = coords[1]
 
     def layerDetails(self, recursive=False, tabNum=0):
         """Prints the details of this layer, calling it for the next layer if desired. 
@@ -569,17 +563,7 @@ class Layer():
       
       return layerList
       
-    def update_abs_pos(self, pos=(0,0)):
-      abs_pos = (self.x_rel + pos[0], self.y_rel + pos[1])
-      
-      self.x = abs_pos[0]
-      self.y = abs_pos[1]
-      
-      if self.innerLayer is not None:
-        self.innerLayer.update_abs_pos(abs_pos)
-      
-      for member in self.memberList:
-          member.update_abs_pos(abs_pos)
+
 
       
     def illustrate(self, ax=None, borderless=False, figdim=5):
@@ -914,6 +898,7 @@ class Layer():
         newMem.y_rel = y
         newMem.polarCoords = cart_to_polar([newMem.x_rel, newMem.y_rel])
         newMem.update_member_positions()
+        newMem.parent = self
         
         # Add it to the list and then make sure all paths are up-to-date # 
         self.memberList.append(newMem)
@@ -1178,7 +1163,7 @@ class RoundTetherDesign():
         self.assignLayerPaths()
 
 
-        self.layer.update_abs_pos((0,0))
+        self.layer.update_member_positions((0,0))
 
         # Geometry and physical properties #
         self.diameter = self.layer.outerDiameter       # (mm)
@@ -1240,7 +1225,7 @@ class RoundTetherDesign():
             borderless (bool, optional): Whether to omit layer borders. Defaults to False.
             figdim (int, optional): Dimension of each side of the figure (inches). Defaults to 5.
         """
-        self.layer.update_abs_pos(pos)
+        self.layer.update_member_positions(pos)
         self.layer.illustrate(ax=ax, borderless=borderless, figdim=figdim)
         
         if ax is not None:
@@ -1396,9 +1381,9 @@ class RoundTetherDesign():
         """
         
         layer = self.getLayerAtPath(path)
-        layer.x += x_delta
-        layer.y += y_delta
-        layer.polarCoords = cart_to_polar([layer.x, layer.y])
+        layer.x_rel += x_delta
+        layer.y_rel += y_delta
+        layer.polarCoords = cart_to_polar([layer.x_rel, layer.y_rel])
         layer.update_member_positions()
 
     def adjustLayerThickness(self, path, thickness):
@@ -1439,8 +1424,8 @@ class RoundTetherDesign():
         newMem = deepcopy(member)
 
         # Assign coordinates for the new member and update encapsulated layers # 
-        newMem.x = x
-        newMem.y = y
+        newMem.x_rel = x
+        newMem.y_rel = y
         newMem.polarCoords = cart_to_polar([newMem.x, newMem.y])
         newMem.update_member_positions()
         
@@ -1469,12 +1454,15 @@ def circle_pack(members, min_diameter = 0, pos=(0,0), scrunch=False, offset_angl
         angle = i*scrunch_angle + offset_angle + gap_angle/2
         m.x_rel = pos[0] + r * math.sin(angle)
         m.y_rel = pos[1] + r * math.cos(angle)
+        m.polarCoords = cart_to_polar((m.x_rel, m.y_rel))
       
     else:
       for i, m in enumerate(members):
         angle = i*2*math.pi/n + offset_angle
         m.x_rel = pos[0] + r * math.sin(angle)
         m.y_rel = pos[1] + r * math.cos(angle)
+        m.polarCoords = cart_to_polar((m.x_rel, m.y_rel))
+        
       
 
 def get_conductor(gauge, db="Basic", stranding=1):
@@ -1523,12 +1511,13 @@ def midpoint(p1, p2):
     return [x_val, y_val]
 
 
-def checkOverlap(container, inner):
+def checkOverlap(container, inner, verbose=False):
     """Checks whether there is any overlap between an inner layer and its container (meaning collision)
 
     Args:
         container (Layer): Containing (outer) layer
         inner (Layer): Inner layer that may overlap
+        verbose: Whether to show math
     Returns:
         Bool: Whether overlap occurs
     """
@@ -1539,6 +1528,7 @@ def checkOverlap(container, inner):
     # Round the comparison to avoid errors in floating point approx. 
     if np.round(innerPolarR + inner.outerRadius, 9) > np.round(outerPolarR + container.outerRadius, 9):
         overlap = True
+        print("Overlap detected: Layer polar extent: %f, Container extent: %f" % (np.round(innerPolarR + inner.outerRadius, 9), np.round(outerPolarR + container.outerRadius, 9)))
 
 
     return overlap
